@@ -91,12 +91,12 @@ def sample_parquet_source(df: pd.DataFrame, target_words: int) -> pd.DataFrame:
 def build_language(lang: str, target_words: int, data_root: Path, output_dir: Path):
     adjusted_target = int(target_words * BYTE_PREMIUMS[lang])
     dataset_dir = data_root / LANGUAGE_DATASETS[lang]
-    is_english = (lang == 'en')
+    uses_text_files = lang in {'en', 'hi'}
 
     print(f'\n  [{lang}] target: {target_words:,} words, '
           f'adjusted (x{BYTE_PREMIUMS[lang]}): {adjusted_target:,} words')
 
-    if is_english:
+    if uses_text_files:
         sources = load_english_sources(dataset_dir)
         # Count words per source
         source_word_counts = {name: count_words_text(text) for name, text in sources.items()}
@@ -124,7 +124,7 @@ def build_language(lang: str, target_words: int, data_root: Path, output_dir: Pa
         target = source_targets[name]
         out_name_prefix = f'{lang}_{name}'
 
-        if is_english:
+        if uses_text_files:
             sampled_text = sample_english_source(sources[name], target)
             sampled_words = count_words_text(sampled_text)
             out_path = output_dir / f'{out_name_prefix}.train.txt'
