@@ -7,6 +7,7 @@ SCRIPT="clean_dataset.py"
 DATASETS=(
     BabyLM-2026-Strict
     BabyLM-2026-Strict-Small
+    translated-babylm-hindi
     babylm-nld
     babylm-zho
 )

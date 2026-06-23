@@ -5,6 +5,7 @@ DATA_DIR="data"
 mkdir -p "$DATA_DIR"
 
 DATASETS=(
+    pulipakav-1/translated-babylm-hindi
     BabyLM-community/babylm-nld
     BabyLM-community/babylm-zho
     BabyLM-community/BabyLM-2026-Strict
