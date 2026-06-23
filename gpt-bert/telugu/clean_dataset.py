@@ -51,9 +51,9 @@ def clean_dataset(dataset_name: str, data_root: Path) -> None:
     if not text_files:
         raise FileNotFoundError(f"No .train*.txt files found in {input_dir}")
     for tf in text_files:
-        lines = tf.read_text(encoding="utf-8", errors="ignore").splitlines()
-        original_len = sum(len(l) for l in lines)
-        cleaned_lines = [c for l in lines if (c := clean_preserve_punctuation(l))]
+        text = tf.read_text(encoding="utf-8", errors="ignore")
+        original_len = len(text)
+        cleaned_lines = [c for l in text.splitlines() if (c := clean_preserve_punctuation(l))]
         cleaned = "\n".join(cleaned_lines)
         tf.write_text(cleaned, encoding="utf-8")
         print(f"Cleaned {tf.name}: {original_len:,} -> {len(cleaned):,} chars")

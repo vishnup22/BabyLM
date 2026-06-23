@@ -60,9 +60,9 @@ def clean_parquet_files(input_dir, output_dir, files):
 
 def clean_text_files(input_dir, output_dir, files):
     for tf in files:
-        lines = tf.read_text(encoding='utf-8', errors='replace').splitlines()
-        original_len = sum(len(l) for l in lines)
-        cleaned_lines = [c for l in lines if (c := clean_preserve_punctuation(l))]
+        text = tf.read_text(encoding='utf-8', errors='replace')
+        original_len = len(text)
+        cleaned_lines = [c for l in text.splitlines() if (c := clean_preserve_punctuation(l))]
         cleaned_text = '\n'.join(cleaned_lines)
         out_path = output_dir / tf.name
         out_path.write_text(cleaned_text, encoding='utf-8')
