@@ -66,7 +66,7 @@ class ModelLogger:
 
     @torch.no_grad()
     def _log_activations(self):
-        if wandb is None:
+        if wandb is None or getattr(wandb, "run", None) is None:
             return
         wandb.log(
             {
@@ -87,7 +87,7 @@ class ModelLogger:
 
     @torch.no_grad()
     def _log_parameter_histograms(self):
-        if wandb is None:
+        if wandb is None or getattr(wandb, "run", None) is None:
             return
         for name, param in self.module.named_parameters():
             wandb.log(
@@ -103,7 +103,7 @@ class ModelLogger:
 
     @torch.no_grad()
     def _log_gradients_histograms(self):
-        if wandb is None:
+        if wandb is None or getattr(wandb, "run", None) is None:
             return
         for name, param in self.module.named_parameters():
             if param.grad is not None:

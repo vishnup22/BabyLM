@@ -11,6 +11,7 @@ from statistics import mean
 import json
 import math
 import copy
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -28,6 +29,26 @@ from utils import (
 )
 from dataset import MaskedDataset, CausalDataset, ValidationDataset
 from model_logging import ModelLogger
+
+
+def compute_checkpoint_token_milestones(total_tokens: int):
+    milestones = []
+    milestones.extend(
+        range(1_000_000, min(10_000_001, total_tokens + 1), 1_000_000)
+    )
+    milestones.extend(
+        range(10_000_000, min(100_000_001, total_tokens + 1), 10_000_000)
+    )
+    milestones.extend(
+        range(100_000_000, min(1_000_000_001, total_tokens + 1), 100_000_000)
+    )
+    return sorted(set(milestones))
+
+
+def checkpoint_label(tokens: int) -> str:
+    if tokens < 1_000_000_000:
+        return f"{tokens // 1_000_000}M"
+    return f"{tokens // 1_000_000_000}B"
 
 
 def parse_arguments():
@@ -340,6 +361,24 @@ def setup_training(args, tokenizer):
             flush=True,
         )
         args.projected_effective_tokens = effective_tokens
+        args.checkpoint_milestones = compute_checkpoint_token_milestones(
+            effective_tokens
+        )
+        if args.checkpoint_milestones:
+            formatted = ", ".join(
+                checkpoint_label(v) for v in args.checkpoint_milestones
+            )
+            print(f"[info] Checkpoint milestones: {formatted}", flush=True)
+    else:
+        args.projected_effective_tokens = 0
+        args.checkpoint_milestones = []
+
+    args.next_checkpoint_idx = 0
+    while (
+        args.next_checkpoint_idx < len(args.checkpoint_milestones)
+        and args.checkpoint_milestones[args.next_checkpoint_idx] <= args.cumulative_tokens
+    ):
+        args.next_checkpoint_idx += 1
 
     # W&B setup
     if is_main_process() and not args.wandb_disabled:
@@ -530,7 +569,10 @@ def training_epoch(
             mask_p_,
         )
         with torch.cuda.amp.autocast(args.mixed_precision, dtype=torch.bfloat16):
-            with ModelLogger(enable=global_step % 100 == 0, module=model):
+            with ModelLogger(
+                enable=(global_step % 100 == 0 and not args.wandb_disabled),
+                module=model,
+            ):
                 loss, accuracy, z_loss, num_tokens = model(
                     input_ids, attention_mask, target_ids
                 )
@@ -622,7 +664,27 @@ def training_epoch(
             seq_len_log = getattr(train_dataloader, "_dataset", None)
         seq_length_value = getattr(seq_len_log, "seq_length", args.seq_length)
         step_tokens = args.current_global_batch_size * seq_length_value
+        prev_cumulative_tokens = args.cumulative_tokens
         args.cumulative_tokens += step_tokens
+
+        while (
+            args.next_checkpoint_idx < len(args.checkpoint_milestones)
+            and prev_cumulative_tokens
+            < args.checkpoint_milestones[args.next_checkpoint_idx]
+            <= args.cumulative_tokens
+        ):
+            milestone_tokens = args.checkpoint_milestones[args.next_checkpoint_idx]
+            save_milestone_checkpoint(
+                model,
+                ema_model,
+                optimizer,
+                scheduler,
+                global_step,
+                epoch,
+                milestone_tokens,
+                args,
+            )
+            args.next_checkpoint_idx += 1
 
         if is_main_process() and not args.wandb_disabled:
             import wandb
@@ -747,6 +809,34 @@ def save(model, ema_model, optimizer, scheduler, global_step, epoch, args):
             },
             args.output_path.replace(".bin", "_state_dict.bin"),
         )
+
+
+def save_milestone_checkpoint(
+    model, ema_model, optimizer, scheduler, global_step, epoch, milestone_tokens, args
+):
+    if not is_main_process():
+        return
+
+    label = checkpoint_label(milestone_tokens)
+    checkpoint_dir = Path(args.output_dir) / "checkpoints" / f"epoch_{label}"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    model_to_save = model.module if hasattr(model, "module") else model
+    torch.save(model_to_save.state_dict(), checkpoint_dir / "latest_student.pt")
+    torch.save(ema_model.state_dict(), checkpoint_dir / "latest_ema.bin")
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "ema_model": ema_model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "global_step": global_step,
+            "epoch": epoch + 1,
+            "cumulative_tokens": getattr(args, "cumulative_tokens", 0),
+            "milestone_tokens": milestone_tokens,
+        },
+        checkpoint_dir / "latest_state_dict.bin",
+    )
 
 
 def load_datasets(
