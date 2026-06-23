@@ -11,10 +11,6 @@ import transformers
 from transformers import GPT2LMHeadModel, GPT2Config
 from transformers.pytorch_utils import ALL_LAYERNORM_LAYERS
 
-DEVICE = torch.device('cuda') if torch.cuda.is_available() \
-    else torch.device('cpu')
-
-
 ## INITIALIZATION ##
 def initialize_model_and_optimizers(cfg):
     student = initialize_model(cfg)
@@ -25,7 +21,7 @@ def initialize_model_and_optimizers(cfg):
 def initialize_model(cfg):
     dataset_name = cfg['dataset']
     config = GPT2Config.from_pretrained(f"./configs/{dataset_name}")
-    student = GPT2LMHeadModel(config).to(DEVICE)
+    student = GPT2LMHeadModel(config).to(cfg["device"])
     return student
 
 def get_parameter_names(model, forbidden_layer_types):
@@ -81,8 +77,10 @@ def save_epoch_checkpoint(student, optimizer, scheduler, epoch, checkpoint_dir):
     folder = os.path.join(checkpoint_dir, f'epoch_{epoch}')
     mkdir(folder)
 
+    model_to_save = student.module if hasattr(student, "module") else student
+
     # Save the metrics and model
     torch.save(optimizer.state_dict(), os.path.join(folder, 'latest_optimizer.pt'))
     torch.save(scheduler.state_dict(), os.path.join(folder, 'latest_scheduler.pt'))
-    torch.save(student.state_dict(), os.path.join(folder, 'latest_student.pt'))
+    torch.save(model_to_save.state_dict(), os.path.join(folder, 'latest_student.pt'))
 

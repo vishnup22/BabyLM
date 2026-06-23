@@ -9,6 +9,7 @@ import yaml
 import random
 import numpy as np
 import torch
+import torch.distributed as dist
 
 def mkdir(dirpath):
     if not os.path.exists(dirpath):
@@ -16,6 +17,18 @@ def mkdir(dirpath):
             os.makedirs(dirpath)
         except FileExistsError:
             pass
+
+
+def is_distributed():
+    return dist.is_available() and dist.is_initialized()
+
+
+def get_rank():
+    return dist.get_rank() if is_distributed() else 0
+
+
+def is_main_process():
+    return get_rank() == 0
 
 def get_config():
     parser = argparse.ArgumentParser()
@@ -64,10 +77,11 @@ def setup_experiment(cfg):
     # Set the seed for reproducibility
     if cfg["seed"] == -1:
         cfg["seed"] = random.randint(0, 1000000)
-    random.seed(cfg["seed"])
-    np.random.seed(cfg["seed"])
-    torch.manual_seed(cfg["seed"])
-    torch.cuda.manual_seed_all(cfg["seed"])
+    process_seed = cfg["seed"] + get_rank()
+    random.seed(process_seed)
+    np.random.seed(process_seed)
+    torch.manual_seed(process_seed)
+    torch.cuda.manual_seed_all(process_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False    
 
@@ -82,8 +96,9 @@ def setup_experiment(cfg):
     mkdir(cfg["checkpoint_dir"])
     mkdir(cfg["logdir"])
 
-    with open(os.path.join(cfg["logdir"], "exp_cfg.yaml"), 'w') as cfg_file:
-        yaml.dump(cfg, cfg_file)
+    if is_main_process():
+        with open(os.path.join(cfg["logdir"], "exp_cfg.yaml"), 'w') as cfg_file:
+            yaml.dump(cfg, cfg_file)
 
 def setup_wandb(cfg):
     wandb_input = {"name" : cfg["wandb_experiment_name"],

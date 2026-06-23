@@ -4,7 +4,9 @@
 
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer
 
@@ -82,18 +84,28 @@ def load_babylm_data(cfg):
     cache_dir = Path('data/cached_train')
     cache_dir.mkdir(parents=True, exist_ok=True)
     filename = cache_dir / f'train_gpt2_{dataset_name}.pkl'
+    is_distributed = dist.is_available() and dist.is_initialized()
+    is_main_process = (not is_distributed) or dist.get_rank() == 0
 
-    if filename.exists():
-        with open(filename, 'rb') as f:
-            full_babylm_dset = pickle.load(f)
-    else:
+    if is_main_process and not filename.exists():
         full_babylm_dset = FullBabyLMDataset(cfg)
         with open(filename, 'wb') as f:
             pickle.dump(full_babylm_dset, f)
+    if is_distributed:
+        dist.barrier()
+
+    with open(filename, 'rb') as f:
+        full_babylm_dset = pickle.load(f)
 
     collate_fn = get_collate_fn(full_babylm_dset.model_eos)
+    sampler = None
+    shuffle = True
+    if is_distributed:
+        sampler = DistributedSampler(full_babylm_dset, shuffle=True)
+        shuffle = False
+
     dataloader = DataLoader(full_babylm_dset, batch_size=cfg["batch_size"],
-                            shuffle=True, collate_fn=collate_fn)
+                            shuffle=shuffle, sampler=sampler, collate_fn=collate_fn)
     return dataloader
 
 def get_collate_fn(model_eos):
