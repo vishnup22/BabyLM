@@ -16,11 +16,7 @@ MASTER_PORT=${MASTER_PORT:-$(( ( RANDOM % 16384 ) + 49152 ))}
 TOK_DIR="$ROOT_DIR/tokenizers/$DATASET"
 DATA_DIR="$ROOT_DIR/data/$DATASET"
 
-export WANDB_DISABLED=${WANDB_DISABLED:-1}
-WANDB_PROJECT=${WANDB_PROJECT:-BabyLM-GPT2}
-WANDB_ENTITY=${WANDB_ENTITY:-}
-export WANDB_PROJECT
-if [[ -n "$WANDB_ENTITY" ]]; then export WANDB_ENTITY; else unset WANDB_ENTITY 2>/dev/null || true; fi
+export WANDB_DISABLED=1
 
 [[ -d "$DATA_DIR" ]] || { echo "Missing dataset dir: $DATA_DIR (run build_multilingual_dataset.py first)"; exit 1; }
 
@@ -30,11 +26,6 @@ if [[ ! -f "$TOK_DIR/tokenizer.json" ]]; then
   (cd "$ROOT_DIR" && python train_tokenizer.py "$DATASET" --vocab_size "$VOCAB_SIZE")
 else
   echo "Using existing tokenizer: $TOK_DIR"
-fi
-
-WANDB_ARGS=()
-if [[ "${WANDB_DISABLED:-1}" == "0" ]]; then
-  WANDB_ARGS=(--use_wandb --wandb_project_name "$WANDB_PROJECT" --wandb_experiment_name "$EXPERIMENT_NAME")
 fi
 
 echo "Launching GPT-2 training on $N_GPUS GPUs"
@@ -56,5 +47,4 @@ exec torchrun \
   --n_epochs "$N_EPOCHS" \
   --words_per_epoch "$WORDS_PER_EPOCH" \
   --experiment_name "$EXPERIMENT_NAME" \
-  "${WANDB_ARGS[@]}" \
   "$@"
