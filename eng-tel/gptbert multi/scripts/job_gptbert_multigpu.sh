@@ -21,4 +21,10 @@ conda activate telugu_llm
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 
-N_GPUS=4 bash scripts/run_train_multigpu.sh
+for SEED in 1 2; do
+  export MASTER_PORT=$((29500 + SEED))
+
+  NAME="en-tel-gptbert-seed${SEED}" \
+  N_GPUS=4 \
+  bash scripts/run_train_multigpu.sh --seed "$SEED"
+done
