@@ -135,4 +135,5 @@ exec torchrun --nproc_per_node="$N_GPUS" --master_addr "$MASTER_ADDR" --master_p
   --max_steps "$MAX_STEPS" \
   --save_every "$SAVE_EVERY" \
   --validate_every "$VALIDATE_EVERY" \
+  --wandb_disabled \
   "$@"
