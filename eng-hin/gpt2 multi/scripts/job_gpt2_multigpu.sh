@@ -24,6 +24,26 @@ if [[ ! -f "tokenizers/en_hi_equal/tokenizer.json" ]]; then
   python train_tokenizer.py en_hi_equal --vocab_size 32768
 fi
 
+# Pre-build dataset cache with a single process to avoid distributed barrier timeout
+CACHE_FILE="data/cached_train/train_gpt2_en_hi_equal.pkl"
+if [[ ! -f "$CACHE_FILE" ]]; then
+  echo "Pre-building dataset cache (single process)..."
+  python - <<'EOF'
+import pickle
+from pathlib import Path
+from data_utils import FullBabyLMDataset
+
+cfg = {"dataset": "en_hi_equal", "datapoint_length": 512}
+cache_dir = Path("data/cached_train")
+cache_dir.mkdir(parents=True, exist_ok=True)
+filename = cache_dir / "train_gpt2_en_hi_equal.pkl"
+dset = FullBabyLMDataset(cfg)
+with open(filename, "wb") as f:
+    pickle.dump(dset, f)
+print(f"Cache saved to {filename}")
+EOF
+fi
+
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 

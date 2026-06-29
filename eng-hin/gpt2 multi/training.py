@@ -5,6 +5,7 @@
 import torch
 import torch.nn as nn
 import torch.distributed as dist
+import datetime
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
@@ -191,7 +192,7 @@ def setup_distributed(cfg):
     if torch.cuda.is_available():
         if cfg["distributed"]:
             torch.cuda.set_device(cfg["local_rank"])
-            dist.init_process_group(backend="nccl")
+            dist.init_process_group(backend="nccl", timeout=datetime.timedelta(hours=2))
         cfg["device"] = torch.device("cuda", cfg["local_rank"])
     else:
         cfg["device"] = torch.device("cpu")
