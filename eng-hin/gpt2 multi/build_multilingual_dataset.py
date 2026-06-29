@@ -35,16 +35,26 @@ LANGUAGE_DATASETS = {
     'zho': 'babylm-zho',
 }
 
+# Only these sources are used per language; None means use all available.
+INCLUDED_SOURCES = {
+    'en': {'bnc_spoken', 'open_subtitles', 'simple_wiki', 'switchboard', 'wikipedia'},
+    'hi': {'childes', 'gutenberg'},
+}
+
 
 def count_words_text(text: str) -> int:
     return len(text.split())
 
 
-def load_english_sources(data_dir: Path) -> dict[str, str]:
-    """Load English .txt sources, returning {source_name: text}."""
+def load_text_sources(data_dir: Path, lang: str) -> dict[str, str]:
+    """Load .txt sources for a language, filtered to INCLUDED_SOURCES[lang]."""
+    allowed = INCLUDED_SOURCES.get(lang)
     sources = {}
     for f in sorted(data_dir.glob('*.train.txt')):
         source_name = f.name.replace('.train.txt', '')
+        if allowed is not None and source_name not in allowed:
+            print(f'  [{lang}] Skipping source not in inclusion list: {source_name}')
+            continue
         sources[source_name] = f.read_text()
     return sources
 
@@ -98,7 +108,7 @@ def build_language(lang: str, target_words: int, data_root: Path, output_dir: Pa
           f'adjusted (x{BYTE_PREMIUMS[lang]}): {adjusted_target:,} words')
 
     if uses_text_files:
-        sources = load_english_sources(dataset_dir)
+        sources = load_text_sources(dataset_dir, lang)
         # Count words per source
         source_word_counts = {name: count_words_text(text) for name, text in sources.items()}
     else:
