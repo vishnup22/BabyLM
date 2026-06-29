@@ -38,6 +38,7 @@ LANGUAGE_DATASETS = {
 # Only these sources are used per language; None means use all available.
 INCLUDED_SOURCES = {
     'en': {'bnc_spoken', 'open_subtitles', 'simple_wiki', 'switchboard'},
+    'te': {'childes', 'gutenberg'},
 }
 
 # Glob pattern and suffix to strip when extracting source names from filenames.
@@ -181,7 +182,7 @@ def main():
     parser.add_argument('--languages', nargs='+', required=True,
                         choices=list(LANGUAGE_DATASETS.keys()),
                         help='Languages to include (en, hi, nld, zho)')
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--words-per-lang', type=int,
                        help='Target words per language (before byte premium)')
     group.add_argument('--total-words', type=int,
@@ -189,15 +190,31 @@ def main():
                             'Non-English languages take all available; English fills the rest.')
     group.add_argument('--lang-words', nargs='+', metavar='LANG=N',
                        help='Exact raw word targets per language, e.g. en=46000000 hi=54000000')
-    parser.add_argument('--output', type=str, required=True,
-                        help='Output directory (e.g. data/en_hi_equal)')
+    parser.add_argument('--output', type=str,
+                        help='Output directory (e.g. data/en_tel_equal). Not required with --count-only.')
     parser.add_argument('--data-root', type=str, default='data',
                         help='Root data directory (default: data)')
+    parser.add_argument('--count-only', action='store_true',
+                        help='Just count available words per language and exit without building.')
     args = parser.parse_args()
+
+    data_root = Path(args.data_root)
+
+    if args.count_only:
+        print(f'Available words per language (data-root: {data_root}):')
+        total = 0
+        for lang in args.languages:
+            n = count_available_words(lang, data_root)
+            total += n
+            print(f'  [{lang}] {n:,} words')
+        print(f'  [total] {total:,} words')
+        return
+
+    if not args.output:
+        parser.error('--output is required unless --count-only is set.')
 
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
-    data_root = Path(args.data_root)
 
     if args.lang_words:
         per_lang = {}

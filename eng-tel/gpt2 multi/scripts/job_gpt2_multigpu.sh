@@ -35,7 +35,7 @@ for SEED in 1 2; do
     --num_processes 4 \
     training.py \
     --dataset "en_tel_equal" \
-    --words_per_epoch 100000000 \
+    --words_per_epoch 88500000 \
     --batch_size 64 \
     --seed "$SEED" \
     --experiment_name "eng-tel-gpt2-seed${SEED}"

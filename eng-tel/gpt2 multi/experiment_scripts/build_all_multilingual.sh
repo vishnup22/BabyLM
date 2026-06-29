@@ -4,8 +4,10 @@ set -euo pipefail
 PYTHON="${PYTHON:-python}"
 SCRIPT="build_multilingual_dataset.py"
 
-# English-Telugu: 46M English (all available) + 54M Telugu = 100M total
-$PYTHON $SCRIPT --languages en te --lang-words en=46000000 te=54000000 --output data/en_tel_equal
+# English: 46M (all available from 4 sources)
+# Telugu:  42.5M (all available from childes + gutenberg)
+# Total:   ~88.5M
+$PYTHON $SCRIPT --languages en te --lang-words en=50000000 te=50000000 --output data/en_tel_equal
 
 echo ""
 echo "Done."
