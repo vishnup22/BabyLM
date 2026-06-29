@@ -30,14 +30,14 @@ BYTE_PREMIUMS = {
 
 LANGUAGE_DATASETS = {
     'en': 'BabyLM-2026-Strict',
-    'hi': 'translated-babylm-hindi',
+    'hi': 'translated-babylm-hindi/train',
     'nld': 'babylm-nld',
     'zho': 'babylm-zho',
 }
 
 # Only these sources are used per language; None means use all available.
 INCLUDED_SOURCES = {
-    'en': {'bnc_spoken', 'open_subtitles', 'simple_wiki', 'switchboard', 'wikipedia'},
+    'en': {'bnc_spoken', 'open_subtitles', 'simple_wiki', 'switchboard'},
     'hi': {'childes', 'gutenberg'},
 }
 
@@ -154,16 +154,31 @@ def build_language(lang: str, target_words: int, data_root: Path, output_dir: Pa
     print(f'  [{lang}] total sampled: {total_sampled:,} / adjusted target {adjusted_target:,}')
 
 
+def count_available_words(lang: str, data_root: Path) -> int:
+    """Count total words available for a language across its included sources."""
+    dataset_dir = data_root / LANGUAGE_DATASETS[lang]
+    if lang in {'en', 'hi'}:
+        sources = load_text_sources(dataset_dir, lang)
+        return sum(count_words_text(text) for text in sources.values())
+    else:
+        sources = load_parquet_sources(dataset_dir)
+        return sum(int(df['num-tokens'].sum()) for df in sources.values())
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Build a multilingual BabyLM dataset.')
     parser.add_argument('--languages', nargs='+', required=True,
                         choices=list(LANGUAGE_DATASETS.keys()),
                         help='Languages to include (en, hi, nld, zho)')
-    parser.add_argument('--words-per-lang', type=int, required=True,
-                        help='Target number of words per language (before byte premium)')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--words-per-lang', type=int,
+                       help='Target words per language (before byte premium)')
+    group.add_argument('--total-words', type=int,
+                       help='Total target words across all languages. '
+                            'Non-English languages take all available; English fills the rest.')
     parser.add_argument('--output', type=str, required=True,
-                        help='Output directory (e.g. data/multilingual-50M)')
+                        help='Output directory (e.g. data/en_hi_equal)')
     parser.add_argument('--data-root', type=str, default='data',
                         help='Root data directory (default: data)')
     args = parser.parse_args()
@@ -172,11 +187,33 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     data_root = Path(args.data_root)
 
-    print(f'Building multilingual dataset: {args.languages}')
-    print(f'Target: {args.words_per_lang:,} words/lang -> {args.output}')
+    if args.total_words:
+        # Count all non-English languages first, English fills the remainder.
+        non_en_langs = [l for l in args.languages if l != 'en']
+        non_en_words = 0
+        per_lang_targets = {}
 
-    for lang in args.languages:
-        build_language(lang, args.words_per_lang, data_root, output_dir)
+        print(f'Building multilingual dataset: {args.languages}')
+        print(f'Total target: {args.total_words:,} words -> {args.output}')
+
+        for lang in non_en_langs:
+            available = count_available_words(lang, data_root)
+            per_lang_targets[lang] = available
+            non_en_words += available
+            print(f'  [{lang}] available: {available:,} words (taking all)')
+
+        en_target = args.total_words - non_en_words
+        if 'en' in args.languages:
+            per_lang_targets['en'] = en_target
+            print(f'  [en] target: {en_target:,} words ({args.total_words:,} - {non_en_words:,} non-en)')
+
+        for lang in args.languages:
+            build_language(lang, per_lang_targets[lang], data_root, output_dir)
+    else:
+        print(f'Building multilingual dataset: {args.languages}')
+        print(f'Target: {args.words_per_lang:,} words/lang -> {args.output}')
+        for lang in args.languages:
+            build_language(lang, args.words_per_lang, data_root, output_dir)
 
     print(f'\nDone. Output written to {output_dir}/')
 
