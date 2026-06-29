@@ -41,6 +41,12 @@ INCLUDED_SOURCES = {
     'hi': {'childes', 'gutenberg'},
 }
 
+# Glob pattern and suffix to strip when extracting source names from filenames.
+TEXT_FILE_PATTERN = {
+    'en': ('*.train.txt',    '.train.txt'),
+    'hi': ('*.train.hi.txt', '.train.hi.txt'),
+}
+
 
 def count_words_text(text: str) -> int:
     return len(text.split())
@@ -49,13 +55,14 @@ def count_words_text(text: str) -> int:
 def load_text_sources(data_dir: Path, lang: str) -> dict[str, str]:
     """Load .txt sources for a language, filtered to INCLUDED_SOURCES[lang]."""
     allowed = INCLUDED_SOURCES.get(lang)
+    glob_pattern, suffix = TEXT_FILE_PATTERN.get(lang, ('*.train.txt', '.train.txt'))
     sources = {}
-    for f in sorted(data_dir.glob('*.train.txt')):
-        source_name = f.name.replace('.train.txt', '')
+    for f in sorted(data_dir.glob(glob_pattern)):
+        source_name = f.name.replace(suffix, '')
         if allowed is not None and source_name not in allowed:
             print(f'  [{lang}] Skipping source not in inclusion list: {source_name}')
             continue
-        sources[source_name] = f.read_text()
+        sources[source_name] = f.read_text(encoding='utf-8')
     return sources
 
 
