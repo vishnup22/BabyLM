@@ -106,13 +106,17 @@ def sample_parquet_source(df: pd.DataFrame, target_words: int) -> pd.DataFrame:
     return df.iloc[:last_idx + 1]
 
 
-def build_language(lang: str, target_words: int, data_root: Path, output_dir: Path):
-    adjusted_target = int(target_words * BYTE_PREMIUMS[lang])
+def build_language(lang: str, target_words: int, data_root: Path, output_dir: Path,
+                   raw: bool = False):
+    adjusted_target = target_words if raw else int(target_words * BYTE_PREMIUMS[lang])
     dataset_dir = data_root / LANGUAGE_DATASETS[lang]
     uses_text_files = lang in {'en', 'hi'}
 
-    print(f'\n  [{lang}] target: {target_words:,} words, '
-          f'adjusted (x{BYTE_PREMIUMS[lang]}): {adjusted_target:,} words')
+    if raw:
+        print(f'\n  [{lang}] target: {target_words:,} words (raw, no byte premium)')
+    else:
+        print(f'\n  [{lang}] target: {target_words:,} words, '
+              f'adjusted (x{BYTE_PREMIUMS[lang]}): {adjusted_target:,} words')
 
     if uses_text_files:
         sources = load_text_sources(dataset_dir, lang)
@@ -184,6 +188,8 @@ def main():
     group.add_argument('--total-words', type=int,
                        help='Total target words across all languages. '
                             'Non-English languages take all available; English fills the rest.')
+    group.add_argument('--lang-words', nargs='+', metavar='LANG=N',
+                       help='Exact raw word targets per language, e.g. en=46000000 hi=54000000')
     parser.add_argument('--output', type=str, required=True,
                         help='Output directory (e.g. data/en_hi_equal)')
     parser.add_argument('--data-root', type=str, default='data',
@@ -194,7 +200,18 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     data_root = Path(args.data_root)
 
-    if args.total_words:
+    if args.lang_words:
+        per_lang = {}
+        for item in args.lang_words:
+            lang, n = item.split('=')
+            per_lang[lang] = int(n)
+        total = sum(per_lang.values())
+        print(f'Building multilingual dataset: {args.languages}')
+        print(f'Per-language raw targets (total {total:,}) -> {args.output}')
+        for lang in args.languages:
+            build_language(lang, per_lang[lang], data_root, output_dir, raw=True)
+
+    elif args.total_words:
         # Count all non-English languages first, English fills the remainder.
         non_en_langs = [l for l in args.languages if l != 'en']
         non_en_words = 0
