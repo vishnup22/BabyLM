@@ -1,19 +1,24 @@
 #!/bin/bash
 #SBATCH --job-name=eng-hin-gptbert
-#SBATCH -t 48:00:00
-#SBATCH -N 1
-#SBATCH -p gpu_a100
-#SBATCH --gpus=4
-#SBATCH --output=logs/gptbert_multigpu_%j.out
-#SBATCH --error=logs/gptbert_multigpu_%j.err
+#SBATCH --partition=gpu-week-long
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:4
+#SBATCH --mem=64G
+#SBATCH --time=5-00:00:00
+#SBATCH --output=logs/eng_hin_gptbert_%j.out
+#SBATCH --error=logs/eng_hin_gptbert_%j.err
 
-set -euo pipefail
+set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR/.."
-
+cd /nfs/storage1/home/pulipakv/BabyLM/eng-hin/gptbert\ multi
 mkdir -p logs
 
-source activate telugu_llm
+eval "$($(which conda) shell.bash hook)"
+conda activate telugu_llm
+
+export TOKENIZERS_PARALLELISM=false
+export MASTER_ADDR=127.0.0.1
 
 N_GPUS=4 bash scripts/run_train_multigpu.sh
