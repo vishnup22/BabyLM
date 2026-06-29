@@ -36,7 +36,7 @@ HYBRID_NUMERATOR=${HYBRID_NUMERATOR:-3}
 CONFIG_VOCAB=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("vocab_size", 32768))' "$CONFIG" 2>/dev/null || echo 32768)
 VOCAB_SIZE="${VOCAB_SIZE:-$CONFIG_VOCAB}"
 
-export WANDB_DISABLED=${WANDB_DISABLED:-0}
+export WANDB_DISABLED=${WANDB_DISABLED:-1}
 WANDB_PROJECT=${WANDB_PROJECT:-BabyLM-GPT-BERT}
 WANDB_ENTITY=${WANDB_ENTITY:-}
 export WANDB_PROJECT
