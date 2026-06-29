@@ -46,6 +46,7 @@ fi
 
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 for SEED in 1 2; do
   export MASTER_PORT=$((29500 + SEED))
@@ -56,7 +57,7 @@ for SEED in 1 2; do
     training.py \
     --dataset "en_hi_equal" \
     --words_per_epoch 100000000 \
-    --batch_size 64 \
+    --batch_size 16 \
     --seed "$SEED" \
     --experiment_name "eng-hin-gpt2-seed${SEED}"
 done
