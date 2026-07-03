@@ -21,5 +21,6 @@ conda activate telugu_llm
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 bash scripts/train_model.sh

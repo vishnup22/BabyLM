@@ -17,7 +17,7 @@ torchrun --nproc_per_node="$N_GPUS" --master_addr "$MASTER_ADDR" --master_port "
   --hybrid_denominator 3 \
   --hybrid_numerator 2 \
   --global_batch_size 32768 \
-  --local_batch_size 128 \
+  --local_batch_size 64 \
   --seq_length 128 \
   --max_steps 15625 \
   --save_every 1000 \
