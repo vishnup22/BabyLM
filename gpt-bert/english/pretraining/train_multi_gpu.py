@@ -660,6 +660,7 @@ def training_epoch(
             }, commit=False)
 
         optimizer.zero_grad(set_to_none=True)
+        torch.cuda.empty_cache()
         total_loss = torch.tensor(0.0, device=args.device)
         total_accuracy = torch.tensor(0.0, device=args.device)
         total_z_loss = torch.tensor(0.0, device=args.device)
