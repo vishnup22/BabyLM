@@ -268,8 +268,8 @@ def main():
     parser.add_argument("--evals",   nargs="+",
                         choices=["perplexity", "blimp", "mblimp", "sib200", "mubench"],
                         default=["perplexity", "blimp", "mblimp", "sib200", "mubench"])
-    parser.add_argument("--mubench_dataset", default=None,
-                        help="HuggingFace dataset ID for MuBench (required for mubench eval)")
+    parser.add_argument("--mubench_dataset", default="aialt/MuBench",
+                        help="HuggingFace dataset ID for MuBench")
     parser.add_argument("--output",  default="results_baselines.json")
     args = parser.parse_args()
 
@@ -305,11 +305,8 @@ def main():
                 results[lang]["sib200"] = eval_sib200(model, tokenizer, lang, device)
 
             if "mubench" in args.evals:
-                if not args.mubench_dataset:
-                    print("  [SKIP] MuBench — --mubench_dataset not provided")
-                else:
-                    results[lang]["mubench"] = eval_mubench(model, tokenizer, lang, device,
-                                                             args.mubench_dataset)
+                results[lang]["mubench"] = eval_mubench(model, tokenizer, lang, device,
+                                                         args.mubench_dataset)
 
         all_results[model_name] = results
         out = Path(args.output)
