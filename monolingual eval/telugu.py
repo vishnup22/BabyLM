@@ -27,6 +27,8 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
 from tqdm import tqdm
 
+torch.set_num_threads(24)
+
 # ── Model registry ─────────────────────────────────────────────────────────────
 
 MODELS = {

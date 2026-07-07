@@ -26,6 +26,8 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
 from tqdm import tqdm
 
+torch.set_num_threads(24)
+
 # ── Model registry ─────────────────────────────────────────────────────────────
 # Fill in model_id once you have the HuggingFace repo links.
 # arch: "causal" for GPT-2 / Llama / Sarvam  |  "gptbert" for GPT-BERT
