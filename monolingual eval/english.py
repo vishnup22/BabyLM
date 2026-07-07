@@ -205,14 +205,13 @@ def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras:
 
 
 def eval_perplexity(model, tokenizer, arch, device, extras) -> dict:
-    results = {}
-    test_ds = load_dataset("BabyLM-community/BabyLM-Test")
-    for split_name, split_ds in test_ds.items():
-        texts = [row["text"] for row in split_ds if row.get("text")]
-        ppl   = compute_perplexity(model, tokenizer, arch, texts, device, extras)
-        results[split_name] = round(ppl, 4)
-        print(f"    Perplexity [{split_name}]: {ppl:.4f}")
-    return results
+    ds    = load_dataset("text",
+                         data_files={"test": "hf://datasets/BabyLM-community/BabyLM-Test/*.test"},
+                         split="test")
+    texts = [row["text"] for row in ds if row.get("text")]
+    ppl   = compute_perplexity(model, tokenizer, arch, texts, device, extras)
+    print(f"    Perplexity [test]: {ppl:.4f}")
+    return {"test": round(ppl, 4)}
 
 
 # ── BLiMP ──────────────────────────────────────────────────────────────────────
