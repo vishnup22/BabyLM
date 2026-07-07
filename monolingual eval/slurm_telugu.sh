@@ -1,12 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=eval_telugu
-#SBATCH --output=logs/telugu_%j.out
-#SBATCH --error=logs/telugu_%j.err
+#SBATCH --job-name=eval-telugu
 #SBATCH --partition=gpu-week-long
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
-#SBATCH --time=24:00:00
+#SBATCH --mem=64G
+#SBATCH --time=2-00:00:00
+#SBATCH --output=logs/eval_telugu_%j.out
+#SBATCH --error=logs/eval_telugu_%j.err
 
 source ~/.bashrc
 conda activate telugu_llm
