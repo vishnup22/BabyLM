@@ -162,7 +162,7 @@ def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras:
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
-def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None) -> dict:
+def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, max_samples=None) -> dict:
     if cleaned_dir:
         cleaned_file = Path(cleaned_dir) / "hindi_test.txt"
         texts = cleaned_file.read_text(encoding="utf-8").splitlines()
@@ -170,6 +170,9 @@ def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None) ->
     else:
         ds    = load_dataset("pulipakav-1/translated-babylm-hindi", split="test")
         texts = [row["text"] for row in ds if row.get("text")]
+    if max_samples and len(texts) > max_samples:
+        import random; random.seed(42)
+        texts = random.sample(texts, max_samples)
     ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras)
     print(f"    Perplexity [test]: {ppl:.4f}")
     return {"test": round(ppl, 4)}
@@ -275,6 +278,8 @@ def main():
                         help="HuggingFace dataset ID for MuBench")
     parser.add_argument("--cleaned_dir", default=None,
                         help="Directory with pre-cleaned .txt files from clean_dataset.py (e.g. cleaned/)")
+    parser.add_argument("--max_ppl_samples", type=int, default=2000,
+                        help="Max sentences for perplexity (default 2000; set 0 for all)")
     parser.add_argument("--output",  default="results_hindi.json")
     args = parser.parse_args()
 
@@ -299,7 +304,8 @@ def main():
 
         if "perplexity" in args.evals:
             results["perplexity"] = eval_perplexity(model, tokenizer, arch, device, extras,
-                                                     args.cleaned_dir)
+                                                     args.cleaned_dir,
+                                                     args.max_ppl_samples or None)
 
         if "mblimp" in args.evals:
             results["mblimp"] = eval_mblimp(model, tokenizer, arch, device, extras)
