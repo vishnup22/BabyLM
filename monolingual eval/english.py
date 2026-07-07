@@ -165,6 +165,8 @@ def load_model(model_id: str, arch: str, device):
             tokenizer = AutoTokenizer.from_pretrained(model_id)
         except ValueError:
             tokenizer = PreTrainedTokenizerFast.from_pretrained(model_id)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
         return model, tokenizer, {}
     elif arch == "gptbert":
         _local = Path(__file__).parents[1] / "gpt-bert"
@@ -184,27 +186,35 @@ def load_model(model_id: str, arch: str, device):
 # ── Perplexity ─────────────────────────────────────────────────────────────────
 
 def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras: dict,
-                       max_seq_len: int = 128) -> float:
+                       max_seq_len: int = 128, batch_size: int = 32) -> float:
     total_nll, total_tokens = 0.0, 0
-    for text in tqdm(texts, desc="  Perplexity", leave=False):
-        if arch == "causal":
-            ids = tokenizer.encode(text, return_tensors="pt").to(device)
-            ids = ids[:, :max_seq_len]
-            if ids.size(1) < 2:
-                continue
+
+    if arch == "causal":
+        for i in tqdm(range(0, len(texts), batch_size), desc="  Perplexity", leave=False):
+            batch = texts[i:i + batch_size]
+            enc = tokenizer(batch, return_tensors="pt", padding=True,
+                            truncation=True, max_length=max_seq_len)
+            input_ids = enc["input_ids"].to(device)
+            attn_mask = enc["attention_mask"].to(device)
             with torch.no_grad():
-                logits    = model(ids).logits
-                log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)
-                nll       = -log_probs[0].gather(-1, ids[0, 1:].unsqueeze(-1)).squeeze(-1).sum().item()
-            total_nll    += nll
-            total_tokens += ids.size(1) - 1
-        elif arch == "gptbert":
+                logits = model(input_ids, attention_mask=attn_mask).logits
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = input_ids[:, 1:].contiguous()
+            shift_mask   = attn_mask[:, 1:].contiguous().float()
+            log_probs    = F.log_softmax(shift_logits, dim=-1)
+            token_ll     = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
+            total_nll    += -(token_ll * shift_mask).sum().item()
+            total_tokens += shift_mask.sum().item()
+
+    elif arch == "gptbert":
+        for text in tqdm(texts, desc="  Perplexity", leave=False):
             token_ids = tokenizer.encode(text, add_special_tokens=False)[:max_seq_len]
             if not token_ids:
                 continue
             pll = score_gptbert_pll(model, token_ids, extras["cls_id"], extras["mask_id"], device)
             total_nll    += -pll
             total_tokens += len(token_ids)
+
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
