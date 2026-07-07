@@ -167,12 +167,19 @@ def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, ma
         cleaned_file = Path(cleaned_dir) / "hindi_test.txt"
         texts = cleaned_file.read_text(encoding="utf-8").splitlines()
         texts = [t for t in texts if t.strip()]
+        if max_samples and len(texts) > max_samples:
+            import random; random.seed(42)
+            texts = random.sample(texts, max_samples)
     else:
-        ds    = load_dataset("pulipakav-1/translated-babylm-hindi", split="test")
-        texts = [row["text"] for row in ds if row.get("text")]
-    if max_samples and len(texts) > max_samples:
-        import random; random.seed(42)
-        texts = random.sample(texts, max_samples)
+        # stream to avoid loading all 1.1M test rows
+        ds = load_dataset("pulipakav-1/translated-babylm-hindi", split="test", streaming=True)
+        texts = []
+        for row in ds:
+            t = row.get("text", "")
+            if t.strip():
+                texts.append(t)
+            if max_samples and len(texts) >= max_samples:
+                break
     ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras)
     print(f"    Perplexity [test]: {ppl:.4f}")
     return {"test": round(ppl, 4)}
