@@ -293,8 +293,16 @@ def main():
     parser.add_argument("--output",  default="results_telugu.json")
     args = parser.parse_args()
 
-    device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    all_results = {}
+    device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    out_stem   = Path(args.output).stem
+    out_dir    = Path(args.output).parent
+    eval_results = {e: {} for e in args.evals}
+
+    def save_eval(eval_name, model_name, data):
+        eval_results[eval_name][model_name] = data
+        path = out_dir / f"{out_stem}_{eval_name}.json"
+        path.write_text(json.dumps(eval_results[eval_name], indent=2))
+        print(f"  Saved → {path}")
 
     for name in args.models:
         cfg      = MODELS[name]
@@ -310,29 +318,27 @@ def main():
         print(f"{'='*60}")
 
         model, tokenizer, extras = load_model(model_id, arch, device)
-        results = {}
 
         if "perplexity" in args.evals:
-            results["perplexity"] = eval_perplexity(model, tokenizer, arch, device, extras,
-                                                     args.cleaned_dir,
-                                                     args.max_ppl_samples or None,
-                                                     args.max_seq_len)
+            save_eval("perplexity", name,
+                      eval_perplexity(model, tokenizer, arch, device, extras,
+                                      args.cleaned_dir,
+                                      args.max_ppl_samples or None,
+                                      args.max_seq_len))
 
         if "sib200" in args.evals:
-            results["sib200"] = eval_sib200(model, tokenizer, arch, device, extras)
+            save_eval("sib200", name,
+                      eval_sib200(model, tokenizer, arch, device, extras))
 
         if "mubench" in args.evals:
-            results["mubench"] = eval_mubench(model, tokenizer, arch, device, extras,
-                                               args.mubench_dataset)
+            save_eval("mubench", name,
+                      eval_mubench(model, tokenizer, arch, device, extras,
+                                   args.mubench_dataset))
 
-        all_results[name] = results
-        out = Path(args.output)
-        out.write_text(json.dumps(all_results, indent=2))
-        print(f"  Saved → {out}")
         del model
         torch.cuda.empty_cache()
 
-    print(f"\nFinal results → {Path(args.output)}")
+    print(f"\nDone. Results in {out_dir}/{out_stem}_*.json")
 
 
 if __name__ == "__main__":
