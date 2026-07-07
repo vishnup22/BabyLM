@@ -167,10 +167,15 @@ def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras:
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
-def eval_perplexity(model, tokenizer, arch, device, extras) -> dict:
-    ds    = load_dataset("pulipakav-1/translated-babylm-telugu", split="test")
-    texts = [row["text"] for row in ds if row.get("text")]
-    ppl   = compute_perplexity(model, tokenizer, arch, texts, device, extras)
+def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None) -> dict:
+    if cleaned_dir:
+        cleaned_file = Path(cleaned_dir) / "telugu_test.txt"
+        texts = cleaned_file.read_text(encoding="utf-8").splitlines()
+        texts = [t for t in texts if t.strip()]
+    else:
+        ds    = load_dataset("pulipakav-1/translated-babylm-telugu", split="test")
+        texts = [row["text"] for row in ds if row.get("text")]
+    ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras)
     print(f"    Perplexity [test]: {ppl:.4f}")
     return {"test": round(ppl, 4)}
 
@@ -251,6 +256,8 @@ def main():
                         default=["perplexity", "sib200", "mubench"])
     parser.add_argument("--mubench_dataset", default="aialt/MuBench",
                         help="HuggingFace dataset ID for MuBench")
+    parser.add_argument("--cleaned_dir", default=None,
+                        help="Directory with pre-cleaned .txt files from clean_dataset.py (e.g. cleaned/)")
     parser.add_argument("--output",  default="results_telugu.json")
     args = parser.parse_args()
 
@@ -274,7 +281,8 @@ def main():
         results = {}
 
         if "perplexity" in args.evals:
-            results["perplexity"] = eval_perplexity(model, tokenizer, arch, device, extras)
+            results["perplexity"] = eval_perplexity(model, tokenizer, arch, device, extras,
+                                                     args.cleaned_dir)
 
         if "sib200" in args.evals:
             results["sib200"] = eval_sib200(model, tokenizer, arch, device, extras)

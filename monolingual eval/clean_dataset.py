@@ -69,13 +69,18 @@ def clean_lang(lang: str, output_dir: Path) -> None:
     label = cfg["label"]
 
     print(f"\n[{lang.upper()}] Loading {repo}" + (f" (split={split})" if split else "") + " ...")
-    ds = load_dataset(repo, split=split)
-
-    # Handle DatasetDict (no explicit split given) — use all splits
-    if hasattr(ds, "items"):
-        splits = dict(ds.items())
+    if lang == "en":
+        # .test files are not auto-detected; load explicitly as text
+        ds = load_dataset("text",
+                          data_files={"test": f"hf://datasets/{repo}/*.test"},
+                          split="test")
+        splits = {"test": ds}
+    elif split:
+        ds = load_dataset(repo, split=split)
+        splits = {split: ds}
     else:
-        splits = {split or "data": ds}
+        ds = load_dataset(repo)
+        splits = dict(ds.items()) if hasattr(ds, "items") else {"data": ds}
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
