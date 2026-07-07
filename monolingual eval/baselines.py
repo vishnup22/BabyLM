@@ -284,9 +284,13 @@ def main():
         print(f"Model : {model_name}  ({model_id})")
         print(f"{'='*60}")
 
-        model     = AutoModelForCausalLM.from_pretrained(model_id).eval().to(device)
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        results   = {}
+        model = AutoModelForCausalLM.from_pretrained(model_id).eval().to(device)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+        except ValueError:
+            from transformers import PreTrainedTokenizerFast
+            tokenizer = PreTrainedTokenizerFast.from_pretrained(model_id)
+        results = {}
 
         for lang in args.langs:
             results[lang] = {}

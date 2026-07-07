@@ -116,8 +116,11 @@ def score_gptbert_pll(model, token_ids: list, cls_id: int, mask_id: int, device)
 
 def load_model(model_id: str, arch: str, device):
     if arch == "causal":
-        model     = AutoModelForCausalLM.from_pretrained(model_id).eval().to(device)
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(model_id).eval().to(device)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+        except ValueError:
+            tokenizer = PreTrainedTokenizerFast.from_pretrained(model_id)
         return model, tokenizer, {}
     elif arch == "gptbert":
         _local = Path(__file__).parents[1] / "gpt-bert"
