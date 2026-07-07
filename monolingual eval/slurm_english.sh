@@ -2,12 +2,11 @@
 #SBATCH --job-name=eval_english
 #SBATCH --output=logs/english_%j.out
 #SBATCH --error=logs/english_%j.err
-#SBATCH --cpus-per-task=24
+#SBATCH --partition=gpu-week-long
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --time=24:00:00
-
-export OMP_NUM_THREADS=24
-export MKL_NUM_THREADS=24
+#SBATCH --time=12:00:00
 
 source ~/.bashrc
 conda activate telugu_llm
