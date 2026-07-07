@@ -272,8 +272,8 @@ def main():
                         help="HuggingFace dataset ID for MuBench")
     parser.add_argument("--cleaned_dir", default=None,
                         help="Directory with pre-cleaned .txt files from clean_dataset.py (e.g. cleaned/)")
-    parser.add_argument("--max_ppl_samples", type=int, default=500,
-                        help="Max sentences for perplexity (default 500; set 0 for all)")
+    parser.add_argument("--max_ppl_samples", type=int, default=0,
+                        help="Max sentences for perplexity (default 0 = all)")
     parser.add_argument("--max_seq_len", type=int, default=128,
                         help="Truncate sequences to this many tokens for perplexity (default 128)")
     parser.add_argument("--output",  default="results_telugu.json")
