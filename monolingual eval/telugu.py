@@ -144,11 +144,13 @@ def load_model(model_id: str, arch: str, device):
 
 # ── Perplexity ─────────────────────────────────────────────────────────────────
 
-def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras: dict) -> float:
+def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras: dict,
+                       max_seq_len: int = 128) -> float:
     total_nll, total_tokens = 0.0, 0
     for text in tqdm(texts, desc="  Perplexity", leave=False):
         if arch == "causal":
             ids = tokenizer.encode(text, return_tensors="pt").to(device)
+            ids = ids[:, :max_seq_len]
             if ids.size(1) < 2:
                 continue
             with torch.no_grad():
@@ -158,7 +160,7 @@ def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras:
             total_nll    += nll
             total_tokens += ids.size(1) - 1
         elif arch == "gptbert":
-            token_ids = tokenizer.encode(text, add_special_tokens=False)
+            token_ids = tokenizer.encode(text, add_special_tokens=False)[:max_seq_len]
             if not token_ids:
                 continue
             pll = score_gptbert_pll(model, token_ids, extras["cls_id"], extras["mask_id"], device)
@@ -167,7 +169,7 @@ def compute_perplexity(model, tokenizer, arch, texts: list[str], device, extras:
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
-def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, max_samples=None) -> dict:
+def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, max_samples=None, max_seq_len=128) -> dict:
     if cleaned_dir:
         cleaned_file = Path(cleaned_dir) / "telugu_test.txt"
         texts = cleaned_file.read_text(encoding="utf-8").splitlines()
@@ -185,7 +187,7 @@ def eval_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, ma
                 texts.append(t)
             if max_samples and len(texts) >= max_samples:
                 break
-    ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras)
+    ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras, max_seq_len)
     print(f"    Perplexity [test]: {ppl:.4f}")
     return {"test": round(ppl, 4)}
 
@@ -268,8 +270,10 @@ def main():
                         help="HuggingFace dataset ID for MuBench")
     parser.add_argument("--cleaned_dir", default=None,
                         help="Directory with pre-cleaned .txt files from clean_dataset.py (e.g. cleaned/)")
-    parser.add_argument("--max_ppl_samples", type=int, default=2000,
-                        help="Max sentences for perplexity (default 2000; set 0 for all)")
+    parser.add_argument("--max_ppl_samples", type=int, default=500,
+                        help="Max sentences for perplexity (default 500; set 0 for all)")
+    parser.add_argument("--max_seq_len", type=int, default=128,
+                        help="Truncate sequences to this many tokens for perplexity (default 128)")
     parser.add_argument("--output",  default="results_telugu.json")
     args = parser.parse_args()
 
@@ -295,7 +299,8 @@ def main():
         if "perplexity" in args.evals:
             results["perplexity"] = eval_perplexity(model, tokenizer, arch, device, extras,
                                                      args.cleaned_dir,
-                                                     args.max_ppl_samples or None)
+                                                     args.max_ppl_samples or None,
+                                                     args.max_seq_len)
 
         if "sib200" in args.evals:
             results["sib200"] = eval_sib200(model, tokenizer, arch, device, extras)
