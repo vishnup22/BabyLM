@@ -7,13 +7,14 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=64G
 #SBATCH --time=1-00:00:00
-#SBATCH --output=logs/eval_english_%j.out
-#SBATCH --error=logs/eval_english_%j.err
+#SBATCH --output=/nfs/storage1/home/pulipakv/BabyLM/monolingual eval/logs/eval_english_%j.out
+#SBATCH --error=/nfs/storage1/home/pulipakv/BabyLM/monolingual eval/logs/eval_english_%j.err
 
 source ~/.bashrc
 conda activate telugu_llm
 
-cd "$(dirname "$0")"
-mkdir -p logs
+WORKDIR="/nfs/storage1/home/pulipakv/BabyLM/monolingual eval"
+mkdir -p "$WORKDIR/logs"
+cd "$WORKDIR"
 
 python english.py --cleaned_dir cleaned
