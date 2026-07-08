@@ -12,20 +12,22 @@
 
 #### Perplexity
 
-| Model | Test |
-|-------|------|
-| GPT-2 (mono) | 140.50 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
-| Llama 3.2 1B | — |
+| Model | Test | OS-data |
+|-------|------|---------|
+| GPT-2 (mono) | 140.50 | 306.06 |
+| GPT-BERT (mono) | 4.8953 | — |
+| Sarvam-2B | 186.58 | — |
+| Llama 3.2 1B | — | — |
+
+> OS-data: perplexity on the English side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
 
 #### BLiMP (macro avg, 67 tasks)
 
 | Model | Score |
 |-------|-------|
 | GPT-2 (mono) | 0.7469 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
+| GPT-BERT (mono) | 0.7978 |
+| Sarvam-2B | 0.8006 |
 | Llama 3.2 1B | — |
 
 #### SIB-200 (`eng_Latn`)
@@ -33,8 +35,8 @@
 | Model | Accuracy |
 |-------|----------|
 | GPT-2 (mono) | 0.3284 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
+| GPT-BERT (mono) | 0.2451 |
+| Sarvam-2B | 0.4706 |
 | Llama 3.2 1B | — |
 
 #### MuBench — English (zero-shot, length-normalised log-likelihood)
@@ -43,7 +45,7 @@
 |-------|-------|-------|--------|------|-----------|------|----------|------|------|------------|------------|------------|-----|
 | GPT-2 (mono) | 0.2311 | 0.2548 | 0.1037 | 0.2366 | 0.2508 | 0.2273 | 0.1113 | 0.3242 | 0.3145 | 0.5248 | 0.2330 | 0.5021 | 0.2762 |
 | GPT-BERT (mono) | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Sarvam-2B | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Sarvam-2B | 0.2242 | 0.2726 | 0.1125 | 0.2299 | 0.2517 | 0.2288 | 0.1149 | 0.3590 | 0.3567 | 0.5433 | 0.2024 | 0.5029 | 0.2833 |
 | Llama 3.2 1B | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 ---
@@ -54,20 +56,22 @@
 
 #### Perplexity
 
-| Model | Test |
-|-------|------|
-| GPT-2 (mono) | 85.41 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
-| Llama 3.2 1B | — |
+| Model | Test | OS-data |
+|-------|------|---------|
+| GPT-2 (mono) | 85.41 | 707.13 |
+| GPT-BERT (mono) | 1.3261 | — |
+| Sarvam-2B | 210.51 | — |
+| Llama 3.2 1B | — | — |
+
+> OS-data: perplexity on the Hindi side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
 
 #### M-BLiMP (`hin`, 1,447 pairs)
 
 | Model | Accuracy |
 |-------|----------|
 | GPT-2 (mono) | 0.9261 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
+| GPT-BERT (mono) | 0.9399 |
+| Sarvam-2B | 0.9772 |
 | Llama 3.2 1B | — |
 
 #### SIB-200 (`hin_Deva`)
@@ -75,8 +79,8 @@
 | Model | Accuracy |
 |-------|----------|
 | GPT-2 (mono) | 0.2353 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
+| GPT-BERT (mono) | 0.1961 |
+| Sarvam-2B | 0.4510 |
 | Llama 3.2 1B | — |
 
 #### MuBench — Hindi (zero-shot, length-normalised log-likelihood)
@@ -85,7 +89,7 @@
 |-------|-------|-------|--------|------|-----------|------|----------|------|------|------------|------------|------------|-----|
 | GPT-2 (mono) | 0.2655 | 0.2632 | 0.1089 | 0.2433 | 0.2593 | 0.2532 | 0.1068 | 0.3244 | 0.3145 | 0.4706 | 0.1854 | 0.5045 | 0.2750 |
 | GPT-BERT (mono) | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Sarvam-2B | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Sarvam-2B | 0.2569 | 0.2467 | 0.1114 | 0.2567 | 0.2521 | 0.2377 | 0.1169 | 0.3525 | 0.3290 | 0.5364 | 0.2194 | 0.5087 | 0.2854 |
 | Llama 3.2 1B | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 ---
@@ -96,12 +100,14 @@
 
 #### Perplexity
 
-| Model | Test |
-|-------|------|
-| GPT-2 (mono) | 134.25 |
-| GPT-BERT (mono) | — |
-| Sarvam-2B | — |
-| Llama 3.2 1B | — |
+| Model | Test | OS-data |
+|-------|------|---------|
+| GPT-2 (mono) | 134.25 | 1343.92 |
+| GPT-BERT (mono) | — | — |
+| Sarvam-2B | 205.81 | — |
+| Llama 3.2 1B | — | — |
+
+> OS-data: perplexity on the Telugu side of `Helsinki-NLP/opus-100` (`en-te` config, full split, streamed).
 
 #### SIB-200 (`tel_Telu`)
 
@@ -109,7 +115,7 @@
 |-------|----------|
 | GPT-2 (mono) | 0.2108 |
 | GPT-BERT (mono) | — |
-| Sarvam-2B | — |
+| Sarvam-2B | 0.3824 |
 | Llama 3.2 1B | — |
 
 #### MuBench — Telugu (zero-shot, length-normalised log-likelihood)
@@ -118,38 +124,10 @@
 |-------|-------|-------|--------|------|-----------|------|----------|------|------|------------|------------|------------|-----|
 | GPT-2 (mono) | 0.2698 | 0.2565 | 0.1100 | 0.2634 | 0.2472 | 0.2441 | 0.1117 | 0.3167 | 0.3289 | 0.5178 | 0.2449 | 0.4872 | 0.2832 |
 | GPT-BERT (mono) | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| Sarvam-2B | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Sarvam-2B | 0.2268 | 0.2573 | 0.1074 | 0.2277 | 0.2472 | 0.2356 | 0.1179 | 0.3167 | 0.3289 | 0.5333 | 0.2245 | 0.4979 | 0.2768 |
 | Llama 3.2 1B | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
----
 
-## Small Models (GPT-Wee, ~28M causal)
-
-> **Status:** Eval job submitted on cluster — results pending.
-> English: `random_seed2` and `curriculum_seed3`. Hindi/Telugu: `random_seed1` and `curriculum_seed1`.
-
-### English
-
-| Model | Perplexity | BLiMP | SIB-200 | MuBench avg |
-|-------|------------|-------|---------|-------------|
-| GPT-Wee (random) | — | — | — | — |
-| GPT-Wee (curriculum) | — | — | — | — |
-
-### Hindi
-
-| Model | Perplexity | M-BLiMP | SIB-200 | MuBench avg |
-|-------|------------|---------|---------|-------------|
-| GPT-Wee (random) | 17.00 | 0.9288 | 0.10 | — |
-| GPT-Wee (curriculum) | — | — | — | — |
-
-### Telugu
-
-| Model | Perplexity | SIB-200 | MuBench avg |
-|-------|------------|---------|-------------|
-| GPT-Wee (random) | — | — | — |
-| GPT-Wee (curriculum) | — | — | — |
-
----
 
 ## Multilingual (Bilingual) Models
 
@@ -157,13 +135,14 @@
 
 #### Perplexity
 
-| Model | Full test | Filtered (training sources only) |
-|-------|-----------|----------------------------------|
-| GPT-2 (eng-hin) | 381.98 | 233.69 |
-| GPT-2 (eng-tel) | 327.79 | 199.26 |
+| Model | Full test | Filtered (training sources only) | OS-data |
+|-------|-----------|----------------------------------|---------|
+| GPT-2 (eng-hin) | 381.98 | 233.69 | 459.80 |
+| GPT-2 (eng-tel) | 327.79 | 199.26 | 377.26 |
 
 > Full test: `pulipakav-1/translated-babylm-english` (all sources).
 > Filtered: [`BabyLM-community/BabyLM-Test`](https://huggingface.co/datasets/BabyLM-community/BabyLM-Test) — `bnc_spoken.test`, `open_subtitles.test`, `simple_wiki.test`, `switchboard.test` (matches bilingual training distribution).
+> OS-data: perplexity on the English side of `Helsinki-NLP/opus-100` (full split, streamed) — `en-hi` config for eng-hin, `en-te` config for eng-tel.
 
 #### BLiMP (macro avg, 67 tasks)
 
@@ -192,12 +171,13 @@
 
 #### Perplexity
 
-| Model | Full test | Filtered (training sources only) |
-|-------|-----------|----------------------------------|
-| GPT-2 (eng-hin) | 131.05 | 93.05 |
+| Model | Full test | Filtered (training sources only) | OS-data |
+|-------|-----------|----------------------------------|---------|
+| GPT-2 (eng-hin) | 131.05 | 93.05 | 879.17 |
 
 > Full test: `pulipakav-1/translated-babylm-hindi` (all sources).
 > Filtered: `pulipakav-1/translated-babylm-hindi` — `childes.test.txt.train.hi.txt` + `gutenberg.test.txt.train.hi.txt`.
+> OS-data: perplexity on the Hindi side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
 
 #### M-BLiMP (`hin`, 1,447 pairs)
 
@@ -223,12 +203,13 @@
 
 #### Perplexity
 
-| Model | Full test | Filtered (training sources only) |
-|-------|-----------|----------------------------------|
-| GPT-2 (eng-tel) | 258.52 | 270.56 |
+| Model | Full test | Filtered (training sources only) | OS-data |
+|-------|-----------|----------------------------------|---------|
+| GPT-2 (eng-tel) | 258.52 | 270.56 | 3937.21 |
 
 > Full test: `pulipakav-1/translated-babylm-telugu` (all sources).
 > Filtered: `pulipakav-1/translated-babylm-telugu` — `childes.test.txt.train.te.txt` + `gutenberg.test.txt.train.te.txt`.
+> OS-data: perplexity on the Telugu side of `Helsinki-NLP/opus-100` (`en-te` config, full split, streamed).
 
 #### SIB-200 (`tel_Telu`)
 
@@ -241,3 +222,16 @@
 | Model | ARC-C | ARC-E | BMLAMA | GPQA | HellaSwag | MMLU | MMLU-Pro | MNLI | SNLI | StoryCloze | TruthfulQA | WinoGrande | Avg |
 |-------|-------|-------|--------|------|-----------|------|----------|------|------|------------|------------|------------|-----|
 | GPT-2 (eng-tel) | 0.2337 | 0.2480 | 0.1004 | 0.2522 | 0.2549 | 0.2446 | 0.1063 | 0.3167 | 0.3289 | 0.4799 | 0.2466 | 0.5054 | 0.2765 |
+
+---
+
+## OpenSubtitles Corpus Statistics
+
+Word/byte counts for the target-language side of `Helsinki-NLP/opus-100` (full `train` split, streamed, UTF-8), used for the word-to-byte ratio comparison against the GPT-5-mini translated curriculum data in the paper.
+
+| Language | Words | Bytes | Ratio (word:byte) |
+|----------|-------|-------|--------------------|
+| Hindi (`en-hi`) | 7,295,887 | 87,313,577 | 1:11.97 |
+| Telugu (`en-te`) | 263,812 | 4,533,526 | 1:17.18 |
+
+> Translated curriculum data (Hindi/Telugu) word/byte counts — pending, needs to be computed on the cluster from `curriculum_data/hindi.txt` and `curriculum_data/telugu.txt`.

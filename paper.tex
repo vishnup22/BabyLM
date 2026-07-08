@@ -139,7 +139,7 @@ BLISS - multilingual baseline. M-BLIMP , use of perplexity in other studies. \ci
 
 \section{Methods}
 
-We use the English 100M words data (NAME) provided by the BabyLM workshop \cite{choshen2026babylm}. We translate each of the sub-sections of the data: CHILDES \cite{macwhinney2000childes}, British National Corpus (BNC) \cite{bnc2007}, dialogue portion, Project Gutenberg (children’s stories) \cite{gerlach2020standardized}, OpenSubtitles \cite{lison-tiedemann-2016-opensubtitles2016}, Simple English Wikipedia \cite{simplewiki2023}, and Switchboard Dialog Act Corpus \cite{stolcke2000dialogue}. We translate the data using GPT-VERSION in the data to Hindi and Telugu, independently, using the following prompt: ``PROMPT''. We use BATCH AND OTHER PARAMETERIZATION. Since the training data is a translation of the original data release, the models in all languages theoretically represent equivalent semantic input that varies in other linguistic properties such as syntactic and morphological structure. We note that the resulting Hindi translation has XXX words into XXX bytes, Telugu translation has XXX words into XXX bytes. These translations amount to XXX:XXX byte-ration for Hindi, and XXX:XXX for Telugu. In comparison, a parallel English-Hindi and an English Telugu data we extracted from OpenSubtitles had XXX:XXX and XXX:XXX ratios CITE-OS. 
+We use the English 100M words data (NAME) provided by the BabyLM workshop \cite{choshen2026babylm}. We translate each of the sub-sections of the data: CHILDES \cite{macwhinney2000childes}, British National Corpus (BNC) \cite{bnc2007}, dialogue portion, Project Gutenberg (children’s stories) \cite{gerlach2020standardized}, OpenSubtitles \cite{lison-tiedemann-2016-opensubtitles2016}, Simple English Wikipedia \cite{simplewiki2023}, and Switchboard Dialog Act Corpus \cite{stolcke2000dialogue}. We translate the data using GPT-VERSION in the data to Hindi and Telugu, independently, using the following prompt: ``PROMPT''. We use BATCH AND OTHER PARAMETERIZATION. Since the training data is a translation of the original data release, the models in all languages theoretically represent equivalent semantic input that varies in other linguistic properties such as syntactic and morphological structure. We note that the resulting Hindi translation has XXX words into XXX bytes, and the Telugu translation has XXX words into XXX bytes. These translations amount to a XXX:XXX word-to-byte ratio for Hindi, and XXX:XXX for Telugu. In comparison, the Hindi and Telugu sides of the parallel English-Hindi and English-Telugu OpenSubtitles data we extracted had 1:11.97 and 1:17.18 word-to-byte ratios, respectively \citep{lison-tiedemann-2016-opensubtitles2016}.
 
 We train monolingual and bilingual models using the code provided by the BabyLM workshop \cite{choshen2026babylm}, including GPT-WEE and GPT-BERT CITATION+NAME-FIX. The monolingual models are trained with a single language data. To analyze the effect of language settings on the resulting model, we create two versions of bilingual models for each language pair. We combine translated data from CHILDES and Gutenberg, while taking the English data for the remaining subsets. This selection aims to represent Indic native language use at home setting and English use in educational settings as observed in naturalistic settings \cite{mohanty2006multilingualism}
 
@@ -176,16 +176,16 @@ Table~\ref{tb:mono} shows the results for the monolingual models on each of the 
 \hline
 Model& Test & OS-data & Essay \\
 \hline
-EN-GPT-Wee &  XXX & XXX & XXX \\
-HI-GPT-Wee & XXX & XXX & XXX \\
-HI-GPT-Wee & XXX & XXX & XXX \\
+EN-GPT-Wee & 140.50 & 306.06 & XXX \\
+HI-GPT-Wee & 85.41 & 707.13 & XXX \\
+TE-GPT-Wee & 134.25 & 1343.92 & XXX \\
 \hline
-EN-GPT-BERT &  XXX & XXX & XXX \\
-HI-GPT-BERT & XXX & XXX & XXX \\
-HI-GPT-BERT & XXX & XXX & XXX \\
+EN-GPT-BERT & 4.8953 & XXX & XXX \\
+HI-GPT-BERT & 1.3261 & XXX & XXX \\
+TE-GPT-BERT & XXX & XXX & XXX \\
 \hline
 \end{tabular}%}
-\caption{Results for the models trained on a single languages. Each column corresponds to testing on the data of the language used to train the model.}
+\caption{Results for the models trained on a single languages. Each column corresponds to testing on the data of the language used to train the model. GPT-BERT perplexity is a pseudo-perplexity (bidirectional, PLL-based) and is not directly comparable to the causal-LM perplexity reported for GPT-Wee.}
 \label{tb:mono}
 \end{table}
 
@@ -200,19 +200,19 @@ HI-GPT-BERT & XXX & XXX & XXX \\
 \hline
 \multirow{2}{*}{Model} & \multicolumn{3}{c}{English} & \multicolumn{3}{c}{Hindi} &  \multicolumn{3}{c}{Telugu}\\
 \cline{2-4} \cline{5-7} \cline{8-10}
- & Test & OS-data & Essay & Test & OS-data & Essay & Test & OS-data & Essay \\ 
+ & Test & OS-data & Essay & Test & OS-data & Essay & Test & OS-data & Essay \\
 \hline
-EN-HI-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-TE-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-HI-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-TE-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+EN-HI-GPT-Wee & 233.69 & 459.80 & XXX & 93.05 & 879.17 & XXX & -- & -- & -- \\
+EN-TE-GPT-Wee & 199.26 & 377.26 & XXX & -- & -- & -- & 270.56 & 3937.21 & XXX \\
+EN-HI-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & -- & -- & -- \\
+EN-TE-GPT-BERT & XXX & XXX & XXX & -- & -- & -- & XXX & XXX & XXX \\
 \hline
 gpt5-mini & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-Sarvam-1 & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+Sarvam-2B & 186.58 & XXX & XXX & 210.51 & XXX & XXX & 205.81 & XXX & XXX \\
 \hline
 \end{tabular}
-\caption{BLiMP}
-\label{tab:blimp}
+\caption{Perplexity results for bilingual models and general-purpose baselines across English, Hindi, and Telugu. ``Test'' for bilingual GPT-Wee models is the filtered test set matching that model's training sources; ``--'' marks a language the model was not trained/evaluated on.}
+\label{tab:bilingual-ppl}
 \end{table*}
 
 \subsection{Linguistic Knowledge}
@@ -229,27 +229,27 @@ We perform the tasks that include Hindi and/or Telugu in the basline: M-Blimp (H
 \hline
 \multirow{2}{*}{Model} & \multicolumn{3}{c}{English} & \multicolumn{3}{c}{Hindi} &  \multicolumn{3}{c}{Telugu}\\
 \cline{2-4} \cline{5-7} \cline{8-10}
- & MBLIMP & SIB200 & MuBench & MBLIMP & SIB200 & MuBench & MBLIMP & SIB200 & MuBench \\ 
+ & MBLIMP & SIB200 & MuBench & MBLIMP & SIB200 & MuBench & MBLIMP & SIB200 & MuBench \\
 \hline
-EN-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-HI-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-TE-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+EN-GPT-Wee & 0.7469 & 0.3284 & 0.2762 & -- & -- & -- & -- & -- & -- \\
+HI-GPT-Wee & -- & -- & -- & 0.9261 & 0.2353 & 0.2750 & -- & -- & -- \\
+TE-GPT-Wee & -- & -- & -- & -- & -- & -- & -- & 0.2108 & 0.2832 \\
 \hline
-EN-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-HI-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-TE-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+EN-GPT-BERT & 0.7978 & 0.2451 & XXX & -- & -- & -- & -- & -- & -- \\
+HI-GPT-BERT & -- & -- & -- & 0.9399 & 0.1961 & XXX & -- & -- & -- \\
+TE-GPT-BERT & -- & -- & -- & -- & -- & -- & -- & XXX & XXX \\
 \hline
-EN-HI-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-TE-GPT-Wee & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-HI-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-EN-TE-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+EN-HI-GPT-Wee & 0.7070 & 0.2647 & 0.2827 & 0.9150 & 0.1324 & 0.2729 & -- & -- & -- \\
+EN-TE-GPT-Wee & 0.7136 & 0.2794 & 0.2803 & -- & -- & -- & -- & 0.2304 & 0.2765 \\
+EN-HI-GPT-BERT & XXX & XXX & XXX & XXX & XXX & XXX & -- & -- & -- \\
+EN-TE-GPT-BERT & XXX & XXX & XXX & -- & -- & -- & XXX & XXX & XXX \\
 \hline
 gpt5-mini & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
-Sarvam-1 & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX & XXX \\
+Sarvam-2B & 0.8006 & 0.4706 & 0.2833 & 0.9772 & 0.4510 & 0.2854 & -- & 0.3824 & 0.2768 \\
 \hline
 \end{tabular}
-\caption{BLiMP}
-\label{tab:blimp}
+\caption{Linguistic knowledge results (BLiMP/M-BLiMP, SIB-200, MuBench) across English, Hindi, and Telugu. The English MBLIMP column reports the 67-task BLiMP macro average (no multilingual M-BLiMP config exists for English); Telugu MBLIMP is left blank as no Telugu M-BLiMP benchmark exists. ``--'' marks a language/benchmark combination that does not apply to that model.}
+\label{tab:linguistic}
 \end{table*}
 
 \subsection{Appendices}
