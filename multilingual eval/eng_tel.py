@@ -235,6 +235,41 @@ def compute_perplexity(model, tokenizer, arch, texts: list, device, extras: dict
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
+# English sources matching bilingual training (excludes childes + gutenberg)
+EN_BILINGUAL_SOURCES = [
+    "hf://datasets/BabyLM-community/BabyLM-Test/bnc_spoken.test",
+    "hf://datasets/BabyLM-community/BabyLM-Test/open_subtitles.test",
+    "hf://datasets/BabyLM-community/BabyLM-Test/simple_wiki.test",
+    "hf://datasets/BabyLM-community/BabyLM-Test/switchboard.test",
+]
+
+TE_BILINGUAL_SOURCES = [
+    "hf://datasets/pulipakav-1/translated-babylm-telugu/test/childes.test.txt.train.te.txt",
+    "hf://datasets/pulipakav-1/translated-babylm-telugu/test/gutenberg.test.txt.train.te.txt",
+]
+
+def eval_en_perplexity_filtered(model, tokenizer, arch, device, extras, max_samples=None, max_seq_len=128) -> dict:
+    ds    = load_dataset("text", data_files={"test": EN_BILINGUAL_SOURCES}, split="test")
+    texts = [row["text"] for row in ds if row.get("text", "").strip()]
+    if max_samples and len(texts) > max_samples:
+        import random; random.seed(42)
+        texts = random.sample(texts, max_samples)
+    ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras, max_seq_len)
+    print(f"    [EN] Perplexity [bilingual-filtered]: {ppl:.4f}")
+    return {"bilingual_filtered": round(ppl, 4)}
+
+
+def eval_te_perplexity_filtered(model, tokenizer, arch, device, extras, max_samples=None, max_seq_len=128) -> dict:
+    ds    = load_dataset("text", data_files={"test": TE_BILINGUAL_SOURCES}, split="test")
+    texts = [row["text"] for row in ds if row.get("text", "").strip()]
+    if max_samples and len(texts) > max_samples:
+        import random; random.seed(42)
+        texts = random.sample(texts, max_samples)
+    ppl = compute_perplexity(model, tokenizer, arch, texts, device, extras, max_seq_len)
+    print(f"    [TE] Perplexity [bilingual-filtered]: {ppl:.4f}")
+    return {"bilingual_filtered": round(ppl, 4)}
+
+
 def eval_en_perplexity(model, tokenizer, arch, device, extras, cleaned_dir=None, max_samples=None, max_seq_len=128) -> dict:
     if cleaned_dir:
         cleaned_file = Path(cleaned_dir) / "english_test.txt"
@@ -366,8 +401,8 @@ def eval_mubench(model, tokenizer, arch, device, extras, mubench_dataset_id: str
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 ALL_EVALS = [
-    "en_perplexity", "en_blimp", "en_sib200", "en_mubench",
-    "te_perplexity", "te_sib200", "te_mubench",
+    "en_perplexity", "en_perplexity_filtered", "en_blimp", "en_sib200", "en_mubench",
+    "te_perplexity", "te_perplexity_filtered", "te_sib200", "te_mubench",
 ]
 
 def main():
@@ -417,6 +452,11 @@ def main():
                       eval_en_perplexity(model, tokenizer, arch, device, extras,
                                          args.cleaned_dir, max_samples, args.max_seq_len))
 
+        if "en_perplexity_filtered" in args.evals:
+            save_eval("en_perplexity_filtered", name,
+                      eval_en_perplexity_filtered(model, tokenizer, arch, device, extras,
+                                                  max_samples, args.max_seq_len))
+
         if "en_blimp" in args.evals:
             save_eval("en_blimp", name,
                       eval_en_blimp(model, tokenizer, arch, device, extras))
@@ -436,6 +476,11 @@ def main():
             save_eval("te_perplexity", name,
                       eval_te_perplexity(model, tokenizer, arch, device, extras,
                                          args.cleaned_dir, max_samples, args.max_seq_len))
+
+        if "te_perplexity_filtered" in args.evals:
+            save_eval("te_perplexity_filtered", name,
+                      eval_te_perplexity_filtered(model, tokenizer, arch, device, extras,
+                                                  max_samples, args.max_seq_len))
 
         if "te_sib200" in args.evals:
             save_eval("te_sib200", name,

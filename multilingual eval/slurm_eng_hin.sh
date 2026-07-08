@@ -16,4 +16,4 @@ conda activate telugu_llm
 cd "/nfs/storage1/home/pulipakv/BabyLM/multilingual eval"
 
 python eng_hin.py \
-    --cleaned_dir "/nfs/storage1/home/pulipakv/BabyLM/monolingual eval/cleaned"
+    --evals en_perplexity_filtered hi_perplexity_filtered
