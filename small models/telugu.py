@@ -32,15 +32,9 @@ torch.set_num_threads(24)
 
 # ── Model registry ─────────────────────────────────────────────────────────────
 
-REPO = "pulipakav-1/babylm_telugu_2026"
-
 MODELS = {
-    "random_seed1":     {"model_id": REPO, "subfolder": "random_seed1",     "arch": "causal"},
-    "random_seed2":     {"model_id": REPO, "subfolder": "random_seed2",     "arch": "causal"},
-    "random_seed3":     {"model_id": REPO, "subfolder": "random_seed3",     "arch": "causal"},
-    "curriculum_seed1": {"model_id": REPO, "subfolder": "curriculum_seed1", "arch": "causal"},
-    "curriculum_seed2": {"model_id": REPO, "subfolder": "curriculum_seed2", "arch": "causal"},
-    "curriculum_seed3": {"model_id": REPO, "subfolder": "curriculum_seed3", "arch": "causal"},
+    "random":     {"model_id": "pulipakav-1/gpt2-telugu-small-babylm2026",            "subfolder": None, "arch": "causal"},
+    "curriculum": {"model_id": "pulipakav-1/gpt2-telugu-small-curriculum_babylm2026", "subfolder": None, "arch": "causal"},
 }
 
 MUBENCH_TASKS = [
