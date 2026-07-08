@@ -11,6 +11,4 @@ accelerate launch \
   --words_per_epoch 100000000 \
   --batch_size 4 \
   --experiment_name "english-strict-100m-curriculum" \
-  --use_wandb \
-  --wandb_project_name "babylm_2026_gpt2" \
-  --wandb_experiment_name "english-strict-100m-curriculum"
+  --experiment_name "english-strict-100m-curriculum"
