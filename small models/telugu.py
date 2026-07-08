@@ -60,7 +60,7 @@ MAX_LEN = 1024
 
 @torch.no_grad()
 def score_causal(model, tokenizer, text: str, device) -> float:
-    ids = tokenizer.encode(text, return_tensors="pt").to(device)
+    ids = tokenizer.encode(text, return_tensors="pt", add_special_tokens=False).to(device)
     ids = ids[:, -MAX_LEN:]
     if ids.size(1) < 2:
         return float("-inf")
@@ -72,7 +72,7 @@ def score_causal(model, tokenizer, text: str, device) -> float:
 
 @torch.no_grad()
 def score_causal_normalized(model, tokenizer, text: str, device) -> float:
-    ids = tokenizer.encode(text, return_tensors="pt").to(device)
+    ids = tokenizer.encode(text, return_tensors="pt", add_special_tokens=False).to(device)
     ids = ids[:, -MAX_LEN:]
     n = ids.size(1) - 1
     if n < 1:
