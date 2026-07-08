@@ -316,9 +316,11 @@ def main():
     eval_results = {e: {} for e in args.evals}
 
     def save_eval(eval_name, model_name, data):
-        eval_results[eval_name][model_name] = data
         path = out_dir / f"{out_stem}_{eval_name}.json"
-        path.write_text(json.dumps(eval_results[eval_name], indent=2))
+        merged = json.loads(path.read_text()) if path.exists() else {}
+        merged[model_name] = data
+        eval_results[eval_name] = merged
+        path.write_text(json.dumps(merged, indent=2))
         print(f"  Saved → {path}")
 
     for name in args.models:
