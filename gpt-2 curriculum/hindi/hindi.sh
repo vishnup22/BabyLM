@@ -12,7 +12,7 @@
 
 set -eo pipefail
 
-cd /nfs/storage1/home/pulipakv/multilingual-babylm/gpt-2/hindi
+cd "/nfs/storage1/home/pulipakv/BabyLM/gpt-2 curriculum/hindi"
 mkdir -p logs
 
 eval "$($(which conda) shell.bash hook)"
@@ -22,4 +22,8 @@ export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 
+echo "=== Training tokenizer ==="
+python train_tokenizer.py translated-babylm-hindi --curriculum_file curriculum_data/hindi.txt
+
+echo "=== Training model ==="
 bash scripts/train_model.sh

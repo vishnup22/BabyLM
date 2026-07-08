@@ -12,7 +12,7 @@
 
 set -eo pipefail
 
-cd /nfs/storage1/home/pulipakv/multilingual-babylm/gpt-2/telugu
+cd "/nfs/storage1/home/pulipakv/BabyLM/gpt-2 curriculum/telugu"
 mkdir -p logs
 
 eval "$($(which conda) shell.bash hook)"
@@ -20,19 +20,12 @@ conda activate telugu_llm
 
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
+export MASTER_PORT=29500
 
-for SEED in 1 2; do
-  export MASTER_PORT=$((29500 + SEED))
+echo "=== Training tokenizer ==="
+python train_tokenizer.py translated-babylm-telugu --curriculum_file curriculum_data/telugu.txt
 
-  accelerate launch \
-    --config_file accelerate_4xa100_bf16.yaml \
-    --num_processes 4 \
-    training.py \
-    --dataset "translated-babylm-telugu" \
-    --words_per_epoch 100000000 \
-    --batch_size 4 \
-    --seed "$SEED" \
-    --experiment_name "telugu-strict-100m-seed${SEED}"
-done
+echo "=== Training model ==="
+bash scripts/train_model.sh
 
 

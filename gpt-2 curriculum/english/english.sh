@@ -12,14 +12,18 @@
 
 set -eo pipefail
 
-cd /path/to/babylm-baselines/gpt-2/english
+cd "/nfs/storage1/home/pulipakv/BabyLM/gpt-2 curriculum/english"
 mkdir -p logs
 
-source ~/.bashrc
-conda activate telugu_babylm
+eval "$($(which conda) shell.bash hook)"
+conda activate telugu_llm
 
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
 
+echo "=== Training tokenizer ==="
+python train_tokenizer.py BabyLM-2026-Strict --curriculum_file curriculum_data/english.txt
+
+echo "=== Training model ==="
 bash scripts/train_model.sh
