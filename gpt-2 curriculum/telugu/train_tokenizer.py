@@ -25,28 +25,13 @@ from tokenizers.trainers import BpeTrainer
 from transformers import PreTrainedTokenizerFast
 
 
-def resolve_input_dir(dataset_name: str, data_root: Path) -> Path:
-    """Use data/<dataset> if files are there, otherwise fall back to data/<dataset>/train."""
-    base_dir = data_root / dataset_name
-    train_dir = base_dir / 'train'
-
-    base_has_files = any(base_dir.glob('*.train*.txt')) or any(base_dir.glob('*.train*.parquet'))
-    train_has_files = any(train_dir.glob('*.train*.txt')) or any(train_dir.glob('*.train*.parquet'))
-
-    if base_has_files:
-        return base_dir
-    if train_has_files:
-        return train_dir
-    return base_dir
-
-
 def collect_training_files(input_dir: Path):
     """Collect .txt files and convert .parquet files to temporary .txt files.
     Returns (list of file paths, list of temp files to clean up)."""
-    txt_files = sorted(str(f) for f in input_dir.glob('*.train*.txt') if f.stem != 'README')
+    txt_files = sorted(str(f) for f in input_dir.glob('*.txt') if f.stem != 'README')
     temp_files = []
 
-    for pf in sorted(input_dir.glob('*.train*.parquet')):
+    for pf in sorted(input_dir.glob('*.parquet')):
         df = pd.read_parquet(pf)
         tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
         tmp.write('\n'.join(df['text'].tolist()))
@@ -61,19 +46,25 @@ def collect_training_files(input_dir: Path):
 def train_tokenizer(dataset_name: str, vocab_size: int = 16384,
                     data_root: Path = Path('data'),
                     tokenizer_root: Path = Path('tokenizers'),
-                    config_root: Path = Path('configs')):
-    input_dir = resolve_input_dir(dataset_name, data_root)
+                    config_root: Path = Path('configs'),
+                    curriculum_file: Path = None):
     output_dir = tokenizer_root / dataset_name
     config_dir = config_root / dataset_name
 
     print(f"Training tokenizer for '{dataset_name}'")
-    print(f"  Input:     {input_dir}")
     print(f"  Tokenizer: {output_dir}")
     print(f"  Config:    {config_dir}")
 
-    files, temp_files = collect_training_files(input_dir)
-    if not files:
-        raise FileNotFoundError(f'No .txt or .parquet files found in {input_dir}')
+    if curriculum_file:
+        files = [str(curriculum_file)]
+        temp_files = []
+        print(f"  Input:     {curriculum_file} (curriculum)")
+    else:
+        input_dir = data_root / dataset_name
+        print(f"  Input:     {input_dir}")
+        files, temp_files = collect_training_files(input_dir)
+        if not files:
+            raise FileNotFoundError(f'No .txt or .parquet files found in {input_dir}')
 
     print(f"  Training on {len(files)} files:")
     for f in files:
@@ -181,5 +172,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a BPE tokenizer on a dataset folder.')
     parser.add_argument('dataset', help='Dataset folder name under data/ (e.g. en_nld_equal)')
     parser.add_argument('--vocab_size', type=int, default=16384)
+    parser.add_argument('--curriculum_file', type=Path, default=None,
+                        help='Train on this .txt file instead of data/ directory')
     args = parser.parse_args()
-    train_tokenizer(args.dataset, args.vocab_size)
+    train_tokenizer(args.dataset, args.vocab_size, curriculum_file=args.curriculum_file)
