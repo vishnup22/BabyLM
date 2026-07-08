@@ -8,7 +8,7 @@
 
 | Model | Test Data | OS-Data | Essay |
 |-------|-----------|---------|-------|
-| GPT-2 (mono) | | | |
+| GPT-2 (mono) | 140.50 | | |
 | GPT-BERT (mono) | | | |
 | Sarvam-2B | | | |
 | Llama 3.2 1B | | | |
@@ -17,7 +17,7 @@
 
 | Model | Score |
 |-------|-------|
-| GPT-2 (mono) | |
+| GPT-2 (mono) | 0.7469 |
 | GPT-BERT (mono) | |
 | Sarvam-2B | |
 | Llama 3.2 1B | |
@@ -26,7 +26,7 @@
 
 | Model | Score |
 |-------|-------|
-| GPT-2 (mono) | |
+| GPT-2 (mono) | 0.3284 |
 | GPT-BERT (mono) | |
 | Sarvam-2B | |
 | Llama 3.2 1B | |
@@ -35,7 +35,7 @@
 
 | Model | ARC-C | ARC-E | BMLAMA | GPQA | HellaSwag | MMLU | MMLU-Pro | MNLI | SNLI | StoryCloze | TruthfulQA | WinoGrande | Avg |
 |-------|-------|-------|--------|------|-----------|------|----------|------|------|------------|------------|------------|-----|
-| GPT-2 (mono) | | | | | | | | | | | | | |
+| GPT-2 (mono) | 0.2311 | 0.2548 | 0.1037 | 0.2366 | 0.2508 | 0.2273 | 0.1113 | 0.3242 | 0.3145 | 0.5248 | 0.2330 | 0.5021 | 0.2762 |
 | GPT-BERT (mono) | | | | | | | | | | | | | |
 | Sarvam-2B | | | | | | | | | | | | | |
 | Llama 3.2 1B | | | | | | | | | | | | | |
