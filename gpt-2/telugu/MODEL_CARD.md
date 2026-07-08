@@ -41,6 +41,17 @@ model-index:
       value: 0.2108
       name: SIB-200 Accuracy (tel_Telu)
       verified: false
+  - task:
+      type: text-generation
+      name: Causal Language Modeling
+    dataset:
+      name: aialt/MuBench
+      type: aialt/MuBench
+    metrics:
+    - type: accuracy
+      value: 0.2832
+      name: MuBench Avg (12 tasks, Telugu)
+      verified: false
 ---
 
 # BabyLM Telugu GPT-2
@@ -111,6 +122,14 @@ Zero-shot topic classification on [`Davlan/sib200`](https://huggingface.co/datas
 | Config | Accuracy |
 |---|---|
 | tel_Telu | 21.08% |
+
+### MuBench (Telugu, zero-shot)
+
+Zero-shot length-normalised log-likelihood on [`aialt/MuBench`](https://huggingface.co/datasets/aialt/MuBench).
+
+| ARC-C | ARC-E | BMLAMA | GPQA | HellaSwag | MMLU | MMLU-Pro | MNLI | SNLI | StoryCloze | TruthfulQA | WinoGrande | **Avg** |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 26.98 | 25.65 | 11.00 | 26.34 | 24.72 | 24.41 | 11.17 | 31.67 | 32.89 | 51.78 | 24.49 | 48.72 | **28.32** |
 
 ## Intended Use
 
