@@ -1,0 +1,17 @@
+{
+  "gpt2_bilingual": {
+    "ARCChallenge": 0.2448,
+    "ARCEasy": 0.2488,
+    "BMLAMA": 0.1032,
+    "GPQA": 0.2545,
+    "Hellaswag": 0.2437,
+    "MMLU": 0.2443,
+    "MMLUPro": 0.1081,
+    "MNLI": 0.3246,
+    "SNLI": 0.3145,
+    "StoryCloze": 0.5333,
+    "TruthfulQA": 0.2449,
+    "WinoGrande": 0.4988,
+    "avg": 0.2803
+  }
+}
