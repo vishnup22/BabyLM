@@ -1,0 +1,326 @@
+"""
+Small model (GPT-Wee, 28M) English evaluation.
+Models: pulipakav-1/babylm_english_2026 — random_seed{1,2,3} and curriculum_seed{1,2,3}
+
+Evaluations:
+  - Perplexity : BabyLM-community/BabyLM-Test
+  - BLiMP      : BabyLM-community/BabyLM-BLIMP-Filtered (67 tasks)
+  - SIB-200    : Davlan/sib200  (config eng_Latn)
+  - MuBench    : per-task configs, lang suffix _en
+
+Usage:
+    python english.py --cleaned_dir cleaned
+    python english.py --models random_seed1 curriculum_seed1
+    python english.py --evals perplexity blimp
+    python english.py --output results_small_english.json
+"""
+
+import argparse
+import json
+import math
+import sys
+from pathlib import Path
+
+import torch
+import torch.nn.functional as F
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
+from tqdm import tqdm
+
+torch.set_num_threads(24)
+
+# ── Model registry ─────────────────────────────────────────────────────────────
+
+REPO = "pulipakav-1/babylm_english_2026"
+
+MODELS = {
+    "random_seed1":     {"model_id": REPO, "subfolder": "random_seed1",     "arch": "causal"},
+    "random_seed2":     {"model_id": REPO, "subfolder": "random_seed2",     "arch": "causal"},
+    "random_seed3":     {"model_id": REPO, "subfolder": "random_seed3",     "arch": "causal"},
+    "curriculum_seed1": {"model_id": REPO, "subfolder": "curriculum_seed1", "arch": "causal"},
+    "curriculum_seed2": {"model_id": REPO, "subfolder": "curriculum_seed2", "arch": "causal"},
+    "curriculum_seed3": {"model_id": REPO, "subfolder": "curriculum_seed3", "arch": "causal"},
+}
+
+BLIMP_TASKS = [
+    "adjunct_island", "anaphor_gender_agreement", "anaphor_number_agreement",
+    "animate_subject_passive", "animate_subject_trans", "causative",
+    "complex_NP_island",
+    "coordinate_structure_constraint_complex_left_branch",
+    "coordinate_structure_constraint_object_extraction",
+    "determiner_noun_agreement_1", "determiner_noun_agreement_2",
+    "determiner_noun_agreement_irregular_1", "determiner_noun_agreement_irregular_2",
+    "determiner_noun_agreement_with_adj_2",
+    "determiner_noun_agreement_with_adj_irregular_1",
+    "determiner_noun_agreement_with_adj_irregular_2",
+    "determiner_noun_agreement_with_adjective_1",
+    "distractor_agreement_relational_noun", "distractor_agreement_relative_clause",
+    "drop_argument", "ellipsis_n_bar_1", "ellipsis_n_bar_2",
+    "existential_there_object_raising",
+    "existential_there_quantifiers_1", "existential_there_quantifiers_2",
+    "existential_there_subject_raising", "expletive_it_object_raising",
+    "inchoative", "intransitive",
+    "irregular_past_participle_adjectives", "irregular_past_participle_verbs",
+    "irregular_plural_subject_verb_agreement_1",
+    "irregular_plural_subject_verb_agreement_2",
+    "left_branch_island_echo_question", "left_branch_island_simple_question",
+    "matrix_question_npi_licensor_present",
+    "npi_present_1", "npi_present_2",
+    "only_npi_licensor_present", "only_npi_scope",
+    "passive_1", "passive_2",
+    "principle_A_c_command", "principle_A_case_1", "principle_A_case_2",
+    "principle_A_domain_1", "principle_A_domain_2", "principle_A_domain_3",
+    "principle_A_reconstruction",
+    "regular_plural_subject_verb_agreement_1", "regular_plural_subject_verb_agreement_2",
+    "sentential_negation_npi_licensor_present", "sentential_negation_npi_scope",
+    "sentential_subject_island",
+    "superlative_quantifiers_1", "superlative_quantifiers_2",
+    "tough_vs_raising_1", "tough_vs_raising_2", "transitive", "wh_island",
+    "wh_questions_object_gap", "wh_questions_subject_gap",
+    "wh_questions_subject_gap_long_distance",
+    "wh_vs_that_no_gap", "wh_vs_that_no_gap_long_distance",
+    "wh_vs_that_with_gap", "wh_vs_that_with_gap_long_distance",
+]
+
+MUBENCH_TASKS = [
+    "ARCChallengeDataset_local_template_en",
+    "ARCEasyDataset_local_template_en",
+    "BMLAMADataset_local_template_en",
+    "GPQADataset_local_template_en",
+    "HellaswagDataset_local_template_en",
+    "MMLUDataset_local_template_en",
+    "MMLUProDataset_local_template_en",
+    "MNLIDataset_local_template_en",
+    "SNLIDataset_local_template_en",
+    "StoryClozeDataset_local_template_en",
+    "TruthfulQADataset_local_template_en",
+    "WinoGrandeDataset_local_template_en",
+]
+
+SIB200_CONFIG = "eng_Latn"
+
+# ── Scoring helpers ────────────────────────────────────────────────────────────
+
+MAX_LEN = 1024
+
+@torch.no_grad()
+def score_causal(model, tokenizer, text: str, device) -> float:
+    ids = tokenizer.encode(text, return_tensors="pt").to(device)
+    ids = ids[:, -MAX_LEN:]
+    if ids.size(1) < 2:
+        return float("-inf")
+    logits    = model(ids).logits
+    log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)
+    token_ll  = log_probs[0].gather(-1, ids[0, 1:].unsqueeze(-1)).squeeze(-1)
+    return token_ll.sum().item()
+
+
+@torch.no_grad()
+def score_causal_normalized(model, tokenizer, text: str, device) -> float:
+    ids = tokenizer.encode(text, return_tensors="pt").to(device)
+    ids = ids[:, -MAX_LEN:]
+    n = ids.size(1) - 1
+    if n < 1:
+        return float("-inf")
+    logits    = model(ids).logits
+    log_probs = F.log_softmax(logits[:, :-1, :], dim=-1)
+    token_ll  = log_probs[0].gather(-1, ids[0, 1:].unsqueeze(-1)).squeeze(-1)
+    return token_ll.sum().item() / n
+
+
+# ── Model loading ──────────────────────────────────────────────────────────────
+
+def load_model(model_id: str, arch: str, device, subfolder: str = None):
+    kwargs = {"subfolder": subfolder} if subfolder else {}
+    if arch == "causal":
+        model = AutoModelForCausalLM.from_pretrained(model_id, **kwargs).eval().to(device)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id, **kwargs)
+        except ValueError:
+            tokenizer = PreTrainedTokenizerFast.from_pretrained(model_id, **kwargs)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        return model, tokenizer, {}
+    else:
+        raise ValueError(f"Unknown arch: {arch}")
+
+
+# ── Perplexity ─────────────────────────────────────────────────────────────────
+
+def compute_perplexity(model, tokenizer, texts: list, device,
+                       max_seq_len: int = 128, batch_size: int = 32) -> float:
+    total_nll, total_tokens = 0.0, 0
+    for i in tqdm(range(0, len(texts), batch_size), desc="  Perplexity", leave=False):
+        batch = texts[i:i + batch_size]
+        enc = tokenizer(batch, return_tensors="pt", padding=True,
+                        truncation=True, max_length=max_seq_len)
+        input_ids = enc["input_ids"].to(device)
+        attn_mask = enc["attention_mask"].to(device)
+        with torch.no_grad():
+            logits = model(input_ids, attention_mask=attn_mask).logits
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = input_ids[:, 1:].contiguous()
+        shift_mask   = attn_mask[:, 1:].contiguous().float()
+        log_probs    = F.log_softmax(shift_logits, dim=-1)
+        token_ll     = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
+        total_nll    += -(token_ll * shift_mask).sum().item()
+        total_tokens += shift_mask.sum().item()
+    return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
+
+
+def eval_perplexity(model, tokenizer, device, cleaned_dir=None, max_samples=None, max_seq_len=128) -> dict:
+    if cleaned_dir:
+        texts = (Path(cleaned_dir) / "english_test.txt").read_text(encoding="utf-8").splitlines()
+        texts = [t for t in texts if t.strip()]
+    else:
+        ds    = load_dataset("text",
+                             data_files={"test": "hf://datasets/BabyLM-community/BabyLM-Test/*.test"},
+                             split="test")
+        texts = [row["text"] for row in ds if row.get("text")]
+    if max_samples and len(texts) > max_samples:
+        import random; random.seed(42)
+        texts = random.sample(texts, max_samples)
+    ppl = compute_perplexity(model, tokenizer, texts, device, max_seq_len)
+    print(f"    Perplexity [test]: {ppl:.4f}")
+    return {"test": round(ppl, 4)}
+
+
+# ── BLiMP ──────────────────────────────────────────────────────────────────────
+
+def eval_blimp(model, tokenizer, device) -> dict:
+    results = {}
+    for task in tqdm(BLIMP_TASKS, desc="  BLiMP"):
+        ds      = load_dataset("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
+        correct = 0
+        for row in ds:
+            good = score_causal(model, tokenizer, row["sentence_good"], device)
+            bad  = score_causal(model, tokenizer, row["sentence_bad"],  device)
+            if good > bad:
+                correct += 1
+        acc = correct / len(ds)
+        results[task] = round(acc, 4)
+        tqdm.write(f"    {task:<60s} {acc:.4f}")
+    macro = sum(results.values()) / len(results)
+    results["macro_avg"] = round(macro, 4)
+    print(f"    BLiMP macro avg: {macro:.4f}")
+    return results
+
+
+# ── SIB-200 ────────────────────────────────────────────────────────────────────
+
+SIB200_LABELS = [
+    "science/technology", "travel", "politics", "sports",
+    "health", "entertainment", "geography",
+]
+
+def eval_sib200(model, tokenizer, device) -> dict:
+    ds      = load_dataset("Davlan/sib200", SIB200_CONFIG, split="test")
+    correct = 0
+    for row in tqdm(ds, desc="  SIB-200", leave=False):
+        text = row["text"]
+        best_score, best_label = float("-inf"), None
+        for label in SIB200_LABELS:
+            score = score_causal_normalized(model, tokenizer, f"{text}\nTopic: {label}", device)
+            if score > best_score:
+                best_score, best_label = score, label
+        if best_label == row["category"]:
+            correct += 1
+    acc = correct / len(ds)
+    print(f"    SIB-200 [{SIB200_CONFIG}]: {acc:.4f}")
+    return {"accuracy": round(acc, 4)}
+
+
+# ── MuBench ────────────────────────────────────────────────────────────────────
+
+def eval_mubench(model, tokenizer, device, mubench_dataset_id: str) -> dict:
+    results = {}
+    for task_config in tqdm(MUBENCH_TASKS, desc="  MuBench"):
+        task_key = task_config.replace("Dataset_local_template_en", "")
+        try:
+            ds = load_dataset(mubench_dataset_id, task_config, split="test")
+        except Exception as e:
+            tqdm.write(f"    SKIP {task_config}: {e}")
+            continue
+        correct = 0
+        for row in ds:
+            prompt  = row["prompt"]
+            choices = row["choices"]
+            label   = row["label"]
+            scores  = []
+            for choice in choices:
+                n = max(len(tokenizer.encode(choice, add_special_tokens=False)), 1)
+                s = score_causal(model, tokenizer, prompt + choice, device) / n
+                scores.append(s)
+            if scores.index(max(scores)) == label:
+                correct += 1
+        acc = correct / len(ds)
+        results[task_key] = round(acc, 4)
+        tqdm.write(f"    {task_key:<30s} {acc:.4f}")
+    if results:
+        results["avg"] = round(sum(results.values()) / len(results), 4)
+    return results
+
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="Small model English evaluation")
+    parser.add_argument("--models", nargs="+", choices=list(MODELS), default=list(MODELS))
+    parser.add_argument("--evals",  nargs="+",
+                        choices=["perplexity", "blimp", "sib200", "mubench"],
+                        default=["perplexity", "blimp", "sib200", "mubench"])
+    parser.add_argument("--mubench_dataset", default="aialt/MuBench")
+    parser.add_argument("--cleaned_dir", default=None)
+    parser.add_argument("--max_ppl_samples", type=int, default=0)
+    parser.add_argument("--max_seq_len",     type=int, default=128)
+    parser.add_argument("--output", default="results_small_english.json")
+    args = parser.parse_args()
+
+    device   = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    out_stem = Path(args.output).stem
+    out_dir  = Path(args.output).parent
+    eval_results = {e: {} for e in args.evals}
+
+    def save_eval(eval_name, model_name, data):
+        path = out_dir / f"{out_stem}_{eval_name}.json"
+        merged = json.loads(path.read_text()) if path.exists() else {}
+        merged[model_name] = data
+        eval_results[eval_name] = merged
+        path.write_text(json.dumps(merged, indent=2))
+        print(f"  Saved → {path}")
+
+    for name in args.models:
+        cfg       = MODELS[name]
+        model_id  = cfg["model_id"]
+        subfolder = cfg["subfolder"]
+        arch      = cfg["arch"]
+
+        print(f"\n{'='*60}")
+        print(f"Model : {name}  ({model_id}/{subfolder})  [{arch}]")
+        print(f"{'='*60}")
+
+        model, tokenizer, _ = load_model(model_id, arch, device, subfolder)
+
+        if "perplexity" in args.evals:
+            save_eval("perplexity", name,
+                      eval_perplexity(model, tokenizer, device,
+                                      args.cleaned_dir, args.max_ppl_samples or None,
+                                      args.max_seq_len))
+        if "blimp" in args.evals:
+            save_eval("blimp", name, eval_blimp(model, tokenizer, device))
+
+        if "sib200" in args.evals:
+            save_eval("sib200", name, eval_sib200(model, tokenizer, device))
+
+        if "mubench" in args.evals:
+            save_eval("mubench", name,
+                      eval_mubench(model, tokenizer, device, args.mubench_dataset))
+
+        del model
+        torch.cuda.empty_cache()
+
+    print(f"\nDone. Results in {out_dir}/{out_stem}_*.json")
+
+
+if __name__ == "__main__":
+    main()
