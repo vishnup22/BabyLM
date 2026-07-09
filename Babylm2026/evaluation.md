@@ -16,8 +16,8 @@
 |-------|------|---------|
 | GPT-2 (mono) | 140.50 | 306.06 |
 | GPT-BERT (mono) | 4.8953 | — |
-| Sarvam-2B | 186.58 | — |
-| Llama 3.2 1B | — | — |
+| Sarvam-2B | 186.58 | 89.50 |
+| Llama 3.2 1B | — | 52.18 |
 
 > OS-data: perplexity on the English side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
 
@@ -60,8 +60,8 @@
 |-------|------|---------|
 | GPT-2 (mono) | 85.41 | 707.13 |
 | GPT-BERT (mono) | 1.3261 | — |
-| Sarvam-2B | 210.51 | — |
-| Llama 3.2 1B | — | — |
+| Sarvam-2B | 210.51 | 229.16 |
+| Llama 3.2 1B | — | 21.07 |
 
 > OS-data: perplexity on the Hindi side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
 
@@ -104,8 +104,8 @@
 |-------|------|---------|
 | GPT-2 (mono) | 134.25 | 1343.92 |
 | GPT-BERT (mono) | — | — |
-| Sarvam-2B | 205.81 | — |
-| Llama 3.2 1B | — | — |
+| Sarvam-2B | 205.81 | 2350.40 |
+| Llama 3.2 1B | — | 4.41 |
 
 > OS-data: perplexity on the Telugu side of `Helsinki-NLP/opus-100` (`en-te` config, full split, streamed).
 
@@ -150,6 +150,7 @@
 |-------|-------|
 | GPT-2 (eng-hin) | 0.7070 |
 | GPT-2 (eng-tel) | 0.7136 |
+| GPT-BERT (eng-hin) | 0.7868 |
 
 #### SIB-200 (`eng_Latn`)
 
@@ -184,6 +185,7 @@
 | Model | Accuracy |
 |-------|----------|
 | GPT-2 (eng-hin) | 0.9150 |
+| GPT-BERT (eng-hin) | 0.9136 |
 
 #### SIB-200 (`hin_Deva`)
 
