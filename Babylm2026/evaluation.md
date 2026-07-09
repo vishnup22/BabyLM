@@ -15,11 +15,12 @@
 | Model | Test | OS-data |
 |-------|------|---------|
 | GPT-2 (mono) | 140.50 | 306.06 |
-| GPT-BERT (mono) | 4.8953 | — |
+| GPT-BERT (mono) | 119.98 | 100.06 |
 | Sarvam-2B | 186.58 | 89.50 |
 | Llama 3.2 1B | — | 52.18 |
 
 > OS-data: perplexity on the English side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
+> GPT-BERT (mono) Test/OS-data are the corrected causal-mode perplexity, replacing the earlier PLL-based pseudo-perplexity (old PLL Test was 4.8953 from a prior run; the new unified script's PLL Test came out as 21.93 — the two PLL numbers disagree, worth double-checking separately, but neither is used here since causal is now the reported metric).
 
 #### BLiMP (macro avg, 67 tasks)
 
@@ -59,11 +60,12 @@
 | Model | Test | OS-data |
 |-------|------|---------|
 | GPT-2 (mono) | 85.41 | 707.13 |
-| GPT-BERT (mono) | 1.3261 | — |
+| GPT-BERT (mono) | 4.60 | 20.79 |
 | Sarvam-2B | 210.51 | 229.16 |
 | Llama 3.2 1B | — | 21.07 |
 
 > OS-data: perplexity on the Hindi side of `Helsinki-NLP/opus-100` (`en-hi` config, full split, streamed).
+> GPT-BERT (mono) Test/OS-data are the corrected causal-mode perplexity (see `eval_gptbert_all.py`), replacing the earlier PLL-based pseudo-perplexity (PLL Test was 1.32 — not comparable to the other rows, kept out of this table).
 
 #### M-BLiMP (`hin`, 1,447 pairs)
 
@@ -139,10 +141,13 @@
 |-------|-----------|----------------------------------|---------|
 | GPT-2 (eng-hin) | 381.98 | 233.69 | 459.80 |
 | GPT-2 (eng-tel) | 327.79 | 199.26 | 377.26 |
+| GPT-BERT (eng-hin) | — | 82.55 | 192.50 |
+| GPT-BERT (eng-tel) | — | 84.49 | 191.50 |
 
 > Full test: `pulipakav-1/translated-babylm-english` (all sources).
 > Filtered: [`BabyLM-community/BabyLM-Test`](https://huggingface.co/datasets/BabyLM-community/BabyLM-Test) — `bnc_spoken.test`, `open_subtitles.test`, `simple_wiki.test`, `switchboard.test` (matches bilingual training distribution).
 > OS-data: perplexity on the English side of `Helsinki-NLP/opus-100` (full split, streamed) — `en-hi` config for eng-hin, `en-te` config for eng-tel.
+> GPT-BERT rows use the corrected causal-mode perplexity (`eval_gptbert_all.py`). "Full test" not computed (that's the translated-babylm-english dataset, not run for these models); instead evaluated on unfiltered `BabyLM-Test` (all 6 sources, untranslated) — eng-hin = 146.60, eng-tel = 111.93 — a different metric not directly comparable to the GPT-2 rows' "Full test" column. PLL Test (old, not comparable): eng-hin = 28.39, eng-tel = 23.49.
 
 #### BLiMP (macro avg, 67 tasks)
 
@@ -151,6 +156,7 @@
 | GPT-2 (eng-hin) | 0.7070 |
 | GPT-2 (eng-tel) | 0.7136 |
 | GPT-BERT (eng-hin) | 0.7868 |
+| GPT-BERT (eng-tel) | 0.7991 |
 
 #### SIB-200 (`eng_Latn`)
 
@@ -158,6 +164,8 @@
 |-------|----------|
 | GPT-2 (eng-hin) | 0.2647 |
 | GPT-2 (eng-tel) | 0.2794 |
+| GPT-BERT (eng-hin) | 0.2500 |
+| GPT-BERT (eng-tel) | 0.2500 |
 
 #### MuBench — English (zero-shot, length-normalised log-likelihood)
 

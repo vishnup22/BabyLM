@@ -327,8 +327,8 @@ def eval_blimp(model, tokenizer, cls_id, mask_id):
         ds = load_dataset("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
         correct = 0
         for row in ds:
-            good_ids = tokenizer.encode(row["sentence_good"], add_special_tokens=False)
-            bad_ids  = tokenizer.encode(row["sentence_bad"], add_special_tokens=False)
+            good_ids = tokenizer.encode(row["sentence_good"], add_special_tokens=False)[:MAX_SEQ_LEN]
+            bad_ids  = tokenizer.encode(row["sentence_bad"], add_special_tokens=False)[:MAX_SEQ_LEN]
             good = score_gptbert_pll(model, good_ids, cls_id, mask_id)
             bad  = score_gptbert_pll(model, bad_ids, cls_id, mask_id)
             if good > bad:
@@ -342,8 +342,8 @@ def eval_mblimp(model, tokenizer, cls_id, mask_id):
     ds = load_dataset("jumelet/multiblimp", "hin", split="train")
     correct = 0
     for row in tqdm(ds, desc="  M-BLiMP", leave=False):
-        good_ids = tokenizer.encode(row["sen"], add_special_tokens=False)
-        bad_ids  = tokenizer.encode(row["wrong_sen"], add_special_tokens=False)
+        good_ids = tokenizer.encode(row["sen"], add_special_tokens=False)[:MAX_SEQ_LEN]
+        bad_ids  = tokenizer.encode(row["wrong_sen"], add_special_tokens=False)[:MAX_SEQ_LEN]
         good = score_gptbert_pll(model, good_ids, cls_id, mask_id)
         bad  = score_gptbert_pll(model, bad_ids, cls_id, mask_id)
         if good > bad:
@@ -358,7 +358,7 @@ def eval_sib200(model, tokenizer, cls_id, mask_id, lang):
         text = row["text"]
         best_score, best_label = float("-inf"), None
         for label in SIB200_LABELS:
-            ids = tokenizer.encode(f"{text}\nTopic: {label}", add_special_tokens=False)
+            ids = tokenizer.encode(f"{text}\nTopic: {label}", add_special_tokens=False)[:MAX_SEQ_LEN]
             score = score_gptbert_pll(model, ids, cls_id, mask_id) / max(len(ids), 1)
             if score > best_score:
                 best_score, best_label = score, label
@@ -383,7 +383,7 @@ def eval_mubench(model, tokenizer, cls_id, mask_id, lang):
             prompt, choices, label = row["prompt"], row["choices"], row["label"]
             scores = []
             for choice in choices:
-                ids = tokenizer.encode(prompt + choice, add_special_tokens=False)
+                ids = tokenizer.encode(prompt + choice, add_special_tokens=False)[:MAX_SEQ_LEN]
                 scores.append(score_gptbert_pll(model, ids, cls_id, mask_id) / max(len(ids), 1))
             if scores.index(max(scores)) == label:
                 correct += 1
