@@ -1,5 +1,10 @@
 """Unified GPT-BERT evaluation: monolingual (en/hi/te) + bilingual (en-hi, en-tel; seed1/seed2).
 
+Distributed across all available GPUs with accelerate: every example (BLiMP/M-BLiMP/SIB-200/
+MuBench row, perplexity text) is independent of every other one, so each eval's dataset is
+sharded across processes/GPUs and only the final correct-counts / NLL sums are reduced across
+ranks -- one evaluation per model, split across GPUs, not N separate jobs.
+
 For every model, evaluates on every language it was trained on:
   - Perplexity : causal (correct, comparable to GPT-2/Sarvam/Llama) on Test + OS-data,
                  plus the old PLL pseudo-perplexity on Test (kept for reference only).
@@ -13,11 +18,14 @@ Bilingual models load from local checkpoints under eng-hin/eng-tel gptbert multi
 (config + tokenizer + seed{1,2}_ema.bin) -- run this from the repo root on the cluster.
 
 Usage:
-    python eval_gptbert_all.py
-    python eval_gptbert_all.py --models mono_en en_hi_seed1
-    python eval_gptbert_all.py --evals perplexity sib200
-    python eval_gptbert_all.py --output results_gptbert_all.json
+    accelerate launch --num_processes 4 eval_gptbert_all.py
+    accelerate launch --num_processes 4 eval_gptbert_all.py --models mono_en en_hi_seed1
+    accelerate launch --num_processes 4 eval_gptbert_all.py --evals perplexity sib200
+    accelerate launch --num_processes 4 eval_gptbert_all.py --output results_gptbert_all.json
     python eval_gptbert_all.py --csv-only results_gptbert_all.json   # just re-export an existing JSON to CSV
+
+    # still works single-GPU, no accelerate launch needed:
+    python eval_gptbert_all.py
 """
 
 import argparse
@@ -28,7 +36,9 @@ import sys
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from accelerate import Accelerator
 from datasets import load_dataset
 from transformers import PreTrainedTokenizerFast
 from tqdm import tqdm
@@ -38,9 +48,14 @@ sys.path.insert(0, str(REPO_ROOT / "gpt-bert"))
 from configuration_gptbert import GptBertConfig
 from modeling_gptbert import GptBertForMaskedLM
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_SEQ_LEN = 128
 BATCH_SIZE  = 32
+
+accelerator = Accelerator()
+DEVICE = accelerator.device
+RANK = accelerator.process_index
+WORLD_SIZE = accelerator.num_processes
+IS_MAIN = accelerator.is_main_process
 
 # ── Model registry ───────────────────────────────────────────────────────────────
 
@@ -140,6 +155,35 @@ OS_OPUS_CONFIG = {"en": ("en", "hi", "en"), "hi": ("en", "hi", "hi"), "te": ("en
 EN_FILTERED_SOURCES = ["bnc_spoken", "open_subtitles", "simple_wiki", "switchboard"]
 
 
+# ── Sharding / reduction helpers ────────────────────────────────────────────────
+
+def shard(items):
+    """Split a list so each rank gets a disjoint ~1/WORLD_SIZE slice."""
+    items = list(items)
+    return items[RANK::WORLD_SIZE]
+
+
+def reduce_sum_pair(a, b):
+    """All-reduce-sum two running totals (e.g. correct/total, or nll/token_count) across ranks."""
+    if WORLD_SIZE > 1:
+        t = torch.tensor([a, b], dtype=torch.float64, device=DEVICE)
+        dist.all_reduce(t, op=dist.ReduceOp.SUM)
+        a, b = t.tolist()
+    return a, b
+
+
+def gather_merge_dicts(d):
+    """Gather a {key: value} dict from every rank and merge into one (every rank gets the result)."""
+    if WORLD_SIZE > 1:
+        gathered = [None] * WORLD_SIZE
+        dist.all_gather_object(gathered, d)
+        merged = {}
+        for gd in gathered:
+            merged.update(gd)
+        return merged
+    return d
+
+
 # ── Model loading ──────────────────────────────────────────────────────────────
 
 def load_model_and_tokenizer(spec):
@@ -158,9 +202,9 @@ def load_model_and_tokenizer(spec):
 
         model = GptBertForMaskedLM(config)
         missing, unexpected = model.load_state_dict(state_dict, strict=True)
-        if missing:
+        if missing and IS_MAIN:
             print(f"  WARNING - missing keys: {missing}")
-        if unexpected:
+        if unexpected and IS_MAIN:
             print(f"  WARNING - unexpected keys: {unexpected}")
         model = model.eval().to(DEVICE)
 
@@ -249,22 +293,25 @@ def score_gptbert_pll(model, token_ids, cls_id, mask_id):
 
 
 def compute_pll_perplexity(model, tokenizer, texts, cls_id, mask_id, max_seq_len=MAX_SEQ_LEN):
+    my_texts = shard(texts)
     total_nll, total_tokens = 0.0, 0
-    for text in tqdm(texts, desc="  PLL perplexity", leave=False):
+    for text in tqdm(my_texts, desc="  PLL perplexity", leave=False, disable=not IS_MAIN):
         token_ids = tokenizer.encode(text, add_special_tokens=False)[:max_seq_len]
         if not token_ids:
             continue
         pll = score_gptbert_pll(model, token_ids, cls_id, mask_id)
         total_nll    += -pll
         total_tokens += len(token_ids)
+    total_nll, total_tokens = reduce_sum_pair(total_nll, total_tokens)
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
 def compute_causal_perplexity(model, tokenizer, texts, cls_id, pad_id,
                                max_seq_len=MAX_SEQ_LEN, batch_size=BATCH_SIZE):
+    my_texts = shard(texts)
     total_nll, total_tokens = 0.0, 0
-    for i in tqdm(range(0, len(texts), batch_size), desc="  Causal perplexity", leave=False):
-        batch_texts = texts[i:i + batch_size]
+    for i in tqdm(range(0, len(my_texts), batch_size), desc="  Causal perplexity", leave=False, disable=not IS_MAIN):
+        batch_texts = my_texts[i:i + batch_size]
         token_lists = [tokenizer.encode(t, add_special_tokens=False)[:max_seq_len - 1] for t in batch_texts]
         token_lists = [t for t in token_lists if len(t) > 0]
         if not token_lists:
@@ -303,6 +350,7 @@ def compute_causal_perplexity(model, tokenizer, texts, cls_id, pad_id,
         total_nll    += nll_sum
         total_tokens += gold.numel()
 
+    total_nll, total_tokens = reduce_sum_pair(total_nll, total_tokens)
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
@@ -322,8 +370,9 @@ def eval_perplexity(model, tokenizer, cls_id, mask_id, pad_id, lang):
 
 
 def eval_blimp(model, tokenizer, cls_id, mask_id):
-    results = {}
-    for task in tqdm(BLIMP_TASKS, desc="  BLiMP"):
+    my_tasks = shard(BLIMP_TASKS)
+    local_results = {}
+    for task in tqdm(my_tasks, desc="  BLiMP", disable=not IS_MAIN):
         ds = load_dataset("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
         correct = 0
         for row in ds:
@@ -333,28 +382,34 @@ def eval_blimp(model, tokenizer, cls_id, mask_id):
             bad  = score_gptbert_pll(model, bad_ids, cls_id, mask_id)
             if good > bad:
                 correct += 1
-        results[task] = round(correct / len(ds), 4)
-    results["macro_avg"] = round(sum(results.values()) / len(results), 4)
+        local_results[task] = round(correct / len(ds), 4)
+    results = gather_merge_dicts(local_results)
+    if results:
+        results["macro_avg"] = round(sum(results.values()) / len(results), 4)
     return results
 
 
 def eval_mblimp(model, tokenizer, cls_id, mask_id):
     ds = load_dataset("jumelet/multiblimp", "hin", split="train")
-    correct = 0
-    for row in tqdm(ds, desc="  M-BLiMP", leave=False):
+    my_rows = shard(list(ds))
+    correct, total = 0, 0
+    for row in tqdm(my_rows, desc="  M-BLiMP", leave=False, disable=not IS_MAIN):
         good_ids = tokenizer.encode(row["sen"], add_special_tokens=False)[:MAX_SEQ_LEN]
         bad_ids  = tokenizer.encode(row["wrong_sen"], add_special_tokens=False)[:MAX_SEQ_LEN]
         good = score_gptbert_pll(model, good_ids, cls_id, mask_id)
         bad  = score_gptbert_pll(model, bad_ids, cls_id, mask_id)
         if good > bad:
             correct += 1
-    return {"accuracy": round(correct / len(ds), 4)}
+        total += 1
+    correct, total = reduce_sum_pair(correct, total)
+    return {"accuracy": round(correct / total, 4) if total > 0 else None}
 
 
 def eval_sib200(model, tokenizer, cls_id, mask_id, lang):
     ds = load_dataset("Davlan/sib200", SIB200_CONFIG[lang], split="test")
-    correct = 0
-    for row in tqdm(ds, desc="  SIB-200", leave=False):
+    my_rows = shard(list(ds))
+    correct, total = 0, 0
+    for row in tqdm(my_rows, desc="  SIB-200", leave=False, disable=not IS_MAIN):
         text = row["text"]
         best_score, best_label = float("-inf"), None
         for label in SIB200_LABELS:
@@ -364,13 +419,16 @@ def eval_sib200(model, tokenizer, cls_id, mask_id, lang):
                 best_score, best_label = score, label
         if best_label == row["category"]:
             correct += 1
-    return {"accuracy": round(correct / len(ds), 4)}
+        total += 1
+    correct, total = reduce_sum_pair(correct, total)
+    return {"accuracy": round(correct / total, 4) if total > 0 else None}
 
 
 def eval_mubench(model, tokenizer, cls_id, mask_id, lang):
     suffix  = MUBENCH_LANG_SUFFIX[lang]
-    results = {}
-    for task_base in tqdm(MUBENCH_TASKS_BASE, desc="  MuBench"):
+    my_tasks = shard(MUBENCH_TASKS_BASE)
+    local_results = {}
+    for task_base in tqdm(my_tasks, desc="  MuBench", disable=not IS_MAIN):
         task_config = task_base + suffix
         task_key    = task_base.replace("Dataset_local_template", "")
         try:
@@ -387,7 +445,8 @@ def eval_mubench(model, tokenizer, cls_id, mask_id, lang):
                 scores.append(score_gptbert_pll(model, ids, cls_id, mask_id) / max(len(ids), 1))
             if scores.index(max(scores)) == label:
                 correct += 1
-        results[task_key] = round(correct / len(ds), 4)
+        local_results[task_key] = round(correct / len(ds), 4)
+    results = gather_merge_dicts(local_results)
     if results:
         results["avg"] = round(sum(results.values()) / len(results), 4)
     return results
@@ -426,59 +485,72 @@ def main():
     parser.add_argument("--evals",  nargs="+",
                         choices=["perplexity", "blimp", "mblimp", "sib200", "mubench"],
                         default=["perplexity", "blimp", "mblimp", "sib200", "mubench"])
+    parser.add_argument("--langs", nargs="+", choices=["en", "hi", "te"], default=None,
+                        help="Restrict to these languages only (default: each model's full lang list)")
     parser.add_argument("--output", default="results_gptbert_all.json")
     parser.add_argument("--csv-only", metavar="JSON_PATH", default=None,
                         help="Skip evaluation entirely; just convert an existing results JSON to CSV")
     args = parser.parse_args()
 
     if args.csv_only:
-        json_path = Path(args.csv_only)
-        all_results = json.loads(json_path.read_text())
-        write_csv(all_results, json_path.with_suffix(".csv"))
+        if IS_MAIN:
+            json_path = Path(args.csv_only)
+            all_results = json.loads(json_path.read_text())
+            write_csv(all_results, json_path.with_suffix(".csv"))
         return
 
     out_path = Path(args.output)
-    all_results = json.loads(out_path.read_text()) if out_path.exists() else {}
+    all_results = json.loads(out_path.read_text()) if out_path.exists() and IS_MAIN else {}
 
     for model_key in args.models:
         spec = MODEL_REGISTRY[model_key]
-        print(f"\n{'='*70}\nModel: {model_key}  ({spec})\n{'='*70}")
+        if IS_MAIN:
+            print(f"\n{'='*70}\nModel: {model_key}  ({spec})  [{WORLD_SIZE} GPU(s)]\n{'='*70}")
 
         model, tokenizer, cls_id, mask_id, pad_id = load_model_and_tokenizer(spec)
         all_results.setdefault(model_key, {})
 
-        for lang in spec["langs"]:
-            print(f"\n  -- {lang.upper()} --")
+        langs = [l for l in (args.langs or spec["langs"]) if l in spec["langs"]]
+        for lang in langs:
+            if IS_MAIN:
+                print(f"\n  -- {lang.upper()} --")
             all_results[model_key].setdefault(lang, {})
 
             if "perplexity" in args.evals:
                 all_results[model_key][lang]["perplexity"] = eval_perplexity(
                     model, tokenizer, cls_id, mask_id, pad_id, lang)
-                print(f"    perplexity: {all_results[model_key][lang]['perplexity']}")
+                if IS_MAIN:
+                    print(f"    perplexity: {all_results[model_key][lang]['perplexity']}")
 
             if lang == "en" and "blimp" in args.evals:
                 all_results[model_key][lang]["blimp"] = eval_blimp(model, tokenizer, cls_id, mask_id)
-                print(f"    blimp macro_avg: {all_results[model_key][lang]['blimp']['macro_avg']}")
+                if IS_MAIN:
+                    print(f"    blimp macro_avg: {all_results[model_key][lang]['blimp']['macro_avg']}")
 
             if lang == "hi" and "mblimp" in args.evals:
                 all_results[model_key][lang]["mblimp"] = eval_mblimp(model, tokenizer, cls_id, mask_id)
-                print(f"    mblimp: {all_results[model_key][lang]['mblimp']}")
+                if IS_MAIN:
+                    print(f"    mblimp: {all_results[model_key][lang]['mblimp']}")
 
             if "sib200" in args.evals:
                 all_results[model_key][lang]["sib200"] = eval_sib200(model, tokenizer, cls_id, mask_id, lang)
-                print(f"    sib200: {all_results[model_key][lang]['sib200']}")
+                if IS_MAIN:
+                    print(f"    sib200: {all_results[model_key][lang]['sib200']}")
 
             if "mubench" in args.evals:
                 all_results[model_key][lang]["mubench"] = eval_mubench(model, tokenizer, cls_id, mask_id, lang)
-                print(f"    mubench avg: {all_results[model_key][lang]['mubench'].get('avg')}")
+                if IS_MAIN:
+                    print(f"    mubench avg: {all_results[model_key][lang]['mubench'].get('avg')}")
 
-            out_path.write_text(json.dumps(all_results, indent=2))
+            if IS_MAIN:
+                out_path.write_text(json.dumps(all_results, indent=2))
 
         del model
         torch.cuda.empty_cache()
 
-    write_csv(all_results, out_path.with_suffix(".csv"))
-    print(f"\nDone. Results in {out_path}")
+    if IS_MAIN:
+        write_csv(all_results, out_path.with_suffix(".csv"))
+        print(f"\nDone. Results in {out_path}")
 
 
 if __name__ == "__main__":
