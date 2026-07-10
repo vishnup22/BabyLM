@@ -6,8 +6,7 @@ sharded across processes/GPUs and only the final correct-counts / NLL sums are r
 ranks -- one evaluation per model, split across GPUs, not N separate jobs.
 
 For every model, evaluates on every language it was trained on:
-  - Perplexity : causal (correct, comparable to GPT-2/Sarvam/Llama) on Test + OS-data,
-                 plus the old PLL pseudo-perplexity on Test (kept for reference only).
+  - Perplexity : causal (correct, comparable to GPT-2/Sarvam/Llama) on Test + OS-data.
   - BLiMP      : English only, 67 tasks (BabyLM-community/BabyLM-BLIMP-Filtered).
   - M-BLiMP    : Hindi only (jumelet/multiblimp, config=hin).
   - SIB-200    : Davlan/sib200, per-language config.
@@ -292,20 +291,6 @@ def score_gptbert_pll(model, token_ids, cls_id, mask_id):
     return log_probs[torch.arange(n, device=DEVICE), gold].sum().item()
 
 
-def compute_pll_perplexity(model, tokenizer, texts, cls_id, mask_id, max_seq_len=MAX_SEQ_LEN):
-    my_texts = shard(texts)
-    total_nll, total_tokens = 0.0, 0
-    for text in tqdm(my_texts, desc="  PLL perplexity", leave=False, disable=not IS_MAIN):
-        token_ids = tokenizer.encode(text, add_special_tokens=False)[:max_seq_len]
-        if not token_ids:
-            continue
-        pll = score_gptbert_pll(model, token_ids, cls_id, mask_id)
-        total_nll    += -pll
-        total_tokens += len(token_ids)
-    total_nll, total_tokens = reduce_sum_pair(total_nll, total_tokens)
-    return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
-
-
 def compute_causal_perplexity(model, tokenizer, texts, cls_id, pad_id,
                                max_seq_len=MAX_SEQ_LEN, batch_size=BATCH_SIZE):
     my_texts = shard(texts)
@@ -354,13 +339,12 @@ def compute_causal_perplexity(model, tokenizer, texts, cls_id, pad_id,
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
-def eval_perplexity(model, tokenizer, cls_id, mask_id, pad_id, lang):
+def eval_perplexity(model, tokenizer, cls_id, pad_id, lang):
     test_texts = load_test_texts(lang)
     os_texts   = load_os_texts(lang)
     result = {
         "causal_test": round(compute_causal_perplexity(model, tokenizer, test_texts, cls_id, pad_id), 4),
         "causal_os":   round(compute_causal_perplexity(model, tokenizer, os_texts, cls_id, pad_id), 4),
-        "pll_test":    round(compute_pll_perplexity(model, tokenizer, test_texts, cls_id, mask_id), 4),
     }
     if lang == "en":
         filtered_texts = load_english_filtered_test_texts()
@@ -518,7 +502,7 @@ def main():
 
             if "perplexity" in args.evals:
                 all_results[model_key][lang]["perplexity"] = eval_perplexity(
-                    model, tokenizer, cls_id, mask_id, pad_id, lang)
+                    model, tokenizer, cls_id, pad_id, lang)
                 if IS_MAIN:
                     print(f"    perplexity: {all_results[model_key][lang]['perplexity']}")
 
