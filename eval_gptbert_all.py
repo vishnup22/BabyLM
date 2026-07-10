@@ -32,12 +32,14 @@ import csv
 import json
 import math
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from accelerate import Accelerator
+from accelerate.utils import InitProcessGroupKwargs
 from datasets import load_dataset
 from transformers import PreTrainedTokenizerFast
 from tqdm import tqdm
@@ -50,7 +52,10 @@ from modeling_gptbert import GptBertForMaskedLM
 MAX_SEQ_LEN = 128
 BATCH_SIZE  = 32
 
-accelerator = Accelerator()
+# Task-level sharding (BLiMP/MuBench) is uneven -- some tasks (e.g. MuBench's GPQA) take far
+# longer than others, so a fast rank can sit waiting at a collective well past NCCL's default
+# 10-minute timeout while a slow rank finishes its heavier task. Use a generous timeout instead.
+accelerator = Accelerator(kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(hours=4))])
 DEVICE = accelerator.device
 RANK = accelerator.process_index
 WORLD_SIZE = accelerator.num_processes
