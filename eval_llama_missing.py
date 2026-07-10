@@ -1,15 +1,23 @@
 """Fill in the missing Llama-3.2-1B evaluations only (OS-data perplexity is already done).
 
+Distributed across all available GPUs with accelerate: each example (BLiMP/M-BLiMP/SIB-200/
+MuBench row, perplexity text) is independent of every other one, so the dataset for each eval
+is sharded across processes/GPUs and only the final correct-counts / NLL sums are reduced
+across ranks -- one evaluation, split across N GPUs, not N separate jobs.
+
 Currently missing per evaluation.md:
   - English : Test perplexity, BLiMP (67 tasks), SIB-200, MuBench
   - Hindi   : Test perplexity, M-BLiMP, SIB-200, MuBench
   - Telugu  : Test perplexity, SIB-200, MuBench (no M-BLiMP -- not available for Telugu)
 
 Usage:
+    accelerate launch --num_processes 4 eval_llama_missing.py
+    accelerate launch --num_processes 4 eval_llama_missing.py --langs en hi
+    accelerate launch --num_processes 4 eval_llama_missing.py --evals perplexity sib200
+    accelerate launch --num_processes 4 eval_llama_missing.py --output results_llama_missing.json
+
+    # still works single-GPU, no accelerate launch needed:
     python eval_llama_missing.py
-    python eval_llama_missing.py --langs en hi
-    python eval_llama_missing.py --evals perplexity sib200
-    python eval_llama_missing.py --output results_llama_missing.json
 """
 
 import argparse
@@ -18,13 +26,14 @@ import math
 from pathlib import Path
 
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from accelerate import Accelerator
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 
 MODEL_ID = "meta-llama/Llama-3.2-1B"
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_LEN = 1024
 MAX_SEQ_LEN = 128
 BATCH_SIZE = 32
@@ -105,6 +114,41 @@ TEST_SOURCE = {
 # equivalent exists for Hindi/Telugu -- translated-babylm-{hi,te} has no per-subsection files.
 EN_FILTERED_SOURCES = ["bnc_spoken", "open_subtitles", "simple_wiki", "switchboard"]
 
+accelerator = Accelerator()
+DEVICE = accelerator.device
+RANK = accelerator.process_index
+WORLD_SIZE = accelerator.num_processes
+IS_MAIN = accelerator.is_main_process
+
+
+# ── Sharding / reduction helpers ────────────────────────────────────────────────
+
+def shard(items):
+    """Split a list so each rank gets a disjoint ~1/WORLD_SIZE slice."""
+    items = list(items)
+    return items[RANK::WORLD_SIZE]
+
+
+def reduce_sum_pair(a, b):
+    """All-reduce-sum two running totals (e.g. correct/total, or nll/token_count) across ranks."""
+    if WORLD_SIZE > 1:
+        t = torch.tensor([a, b], dtype=torch.float64, device=DEVICE)
+        dist.all_reduce(t, op=dist.ReduceOp.SUM)
+        a, b = t.tolist()
+    return a, b
+
+
+def gather_merge_dicts(d):
+    """Gather a {key: value} dict from every rank and merge into one (every rank gets the result)."""
+    if WORLD_SIZE > 1:
+        gathered = [None] * WORLD_SIZE
+        dist.all_gather_object(gathered, d)
+        merged = {}
+        for gd in gathered:
+            merged.update(gd)
+        return merged
+    return d
+
 
 # ── Data loading ─────────────────────────────────────────────────────────────────
 
@@ -150,9 +194,10 @@ def score_causal_normalized(model, tokenizer, text):
 
 
 def compute_perplexity(model, tokenizer, texts):
+    my_texts = shard(texts)
     total_nll, total_tokens = 0.0, 0
-    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="  Perplexity", leave=False):
-        batch = texts[i:i + BATCH_SIZE]
+    for i in tqdm(range(0, len(my_texts), BATCH_SIZE), desc="  Perplexity", leave=False, disable=not IS_MAIN):
+        batch = my_texts[i:i + BATCH_SIZE]
         enc = tokenizer(batch, return_tensors="pt", padding=True,
                         truncation=True, max_length=MAX_SEQ_LEN)
         input_ids = enc["input_ids"].to(DEVICE)
@@ -166,12 +211,14 @@ def compute_perplexity(model, tokenizer, texts):
         token_ll = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
         total_nll += -(token_ll * shift_mask).sum().item()
         total_tokens += shift_mask.sum().item()
+    total_nll, total_tokens = reduce_sum_pair(total_nll, total_tokens)
     return math.exp(total_nll / total_tokens) if total_tokens > 0 else float("inf")
 
 
 def eval_blimp(model, tokenizer):
-    results = {}
-    for task in tqdm(BLIMP_TASKS, desc="  BLiMP"):
+    my_tasks = shard(BLIMP_TASKS)
+    local_results = {}
+    for task in tqdm(my_tasks, desc="  BLiMP", disable=not IS_MAIN):
         ds = load_dataset("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
         correct = 0
         for row in ds:
@@ -179,26 +226,32 @@ def eval_blimp(model, tokenizer):
             bad = score_causal(model, tokenizer, row["sentence_bad"])
             if good > bad:
                 correct += 1
-        results[task] = round(correct / len(ds), 4)
-    results["macro_avg"] = round(sum(results.values()) / len(results), 4)
+        local_results[task] = round(correct / len(ds), 4)
+    results = gather_merge_dicts(local_results)
+    if results:
+        results["macro_avg"] = round(sum(results.values()) / len(results), 4)
     return results
 
 
 def eval_mblimp(model, tokenizer):
     ds = load_dataset("jumelet/multiblimp", "hin", split="train")
-    correct = 0
-    for row in tqdm(ds, desc="  M-BLiMP", leave=False):
+    my_rows = shard(list(ds))
+    correct, total = 0, 0
+    for row in tqdm(my_rows, desc="  M-BLiMP", leave=False, disable=not IS_MAIN):
         good = score_causal(model, tokenizer, row["sen"])
         bad = score_causal(model, tokenizer, row["wrong_sen"])
         if good > bad:
             correct += 1
-    return {"accuracy": round(correct / len(ds), 4)}
+        total += 1
+    correct, total = reduce_sum_pair(correct, total)
+    return {"accuracy": round(correct / total, 4) if total > 0 else None}
 
 
 def eval_sib200(model, tokenizer, lang):
     ds = load_dataset("Davlan/sib200", SIB200_CONFIG[lang], split="test")
-    correct = 0
-    for row in tqdm(ds, desc="  SIB-200", leave=False):
+    my_rows = shard(list(ds))
+    correct, total = 0, 0
+    for row in tqdm(my_rows, desc="  SIB-200", leave=False, disable=not IS_MAIN):
         text = row["text"]
         best_score, best_label = float("-inf"), None
         for label in SIB200_LABELS:
@@ -207,13 +260,16 @@ def eval_sib200(model, tokenizer, lang):
                 best_score, best_label = score, label
         if best_label == row["category"]:
             correct += 1
-    return {"accuracy": round(correct / len(ds), 4)}
+        total += 1
+    correct, total = reduce_sum_pair(correct, total)
+    return {"accuracy": round(correct / total, 4) if total > 0 else None}
 
 
 def eval_mubench(model, tokenizer, lang):
     suffix = MUBENCH_LANG_SUFFIX[lang]
-    results = {}
-    for task_base in tqdm(MUBENCH_TASKS_BASE, desc="  MuBench"):
+    my_tasks = shard(MUBENCH_TASKS_BASE)
+    local_results = {}
+    for task_base in tqdm(my_tasks, desc="  MuBench", disable=not IS_MAIN):
         task_config = task_base + suffix
         task_key = task_base.replace("Dataset_local_template", "")
         try:
@@ -231,7 +287,8 @@ def eval_mubench(model, tokenizer, lang):
                 scores.append(score_causal(model, tokenizer, text) / n)
             if scores.index(max(scores)) == label:
                 correct += 1
-        results[task_key] = round(correct / len(ds), 4)
+        local_results[task_key] = round(correct / len(ds), 4)
+    results = gather_merge_dicts(local_results)
     if results:
         results["avg"] = round(sum(results.values()) / len(results), 4)
     return results
@@ -249,16 +306,18 @@ def main():
     args = parser.parse_args()
 
     out_path = Path(args.output)
-    all_results = json.loads(out_path.read_text()) if out_path.exists() else {}
+    all_results = json.loads(out_path.read_text()) if out_path.exists() and IS_MAIN else {}
 
-    print(f"Loading {MODEL_ID} ...")
+    if IS_MAIN:
+        print(f"Loading {MODEL_ID} on {WORLD_SIZE} process(es) ...")
     model = AutoModelForCausalLM.from_pretrained(MODEL_ID).eval().to(DEVICE)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     for lang in args.langs:
-        print(f"\n-- {lang.upper()} --")
+        if IS_MAIN:
+            print(f"\n-- {lang.upper()} --")
         all_results.setdefault(lang, {})
 
         if "perplexity" in args.evals:
@@ -268,27 +327,34 @@ def main():
                 filtered_texts = load_english_filtered_test_texts()
                 perplexity["test_filtered"] = round(compute_perplexity(model, tokenizer, filtered_texts), 4)
             all_results[lang]["perplexity"] = perplexity
-            print(f"  perplexity: {all_results[lang]['perplexity']}")
+            if IS_MAIN:
+                print(f"  perplexity: {all_results[lang]['perplexity']}")
 
         if lang == "en" and "blimp" in args.evals:
             all_results[lang]["blimp"] = eval_blimp(model, tokenizer)
-            print(f"  blimp macro_avg: {all_results[lang]['blimp']['macro_avg']}")
+            if IS_MAIN:
+                print(f"  blimp macro_avg: {all_results[lang]['blimp']['macro_avg']}")
 
         if lang == "hi" and "mblimp" in args.evals:
             all_results[lang]["mblimp"] = eval_mblimp(model, tokenizer)
-            print(f"  mblimp: {all_results[lang]['mblimp']}")
+            if IS_MAIN:
+                print(f"  mblimp: {all_results[lang]['mblimp']}")
 
         if "sib200" in args.evals:
             all_results[lang]["sib200"] = eval_sib200(model, tokenizer, lang)
-            print(f"  sib200: {all_results[lang]['sib200']}")
+            if IS_MAIN:
+                print(f"  sib200: {all_results[lang]['sib200']}")
 
         if "mubench" in args.evals:
             all_results[lang]["mubench"] = eval_mubench(model, tokenizer, lang)
-            print(f"  mubench avg: {all_results[lang]['mubench'].get('avg')}")
+            if IS_MAIN:
+                print(f"  mubench avg: {all_results[lang]['mubench'].get('avg')}")
 
-        out_path.write_text(json.dumps(all_results, indent=2))
+        if IS_MAIN:
+            out_path.write_text(json.dumps(all_results, indent=2))
 
-    print(f"\nDone. Results in {out_path}")
+    if IS_MAIN:
+        print(f"\nDone. Results in {out_path}")
 
 
 if __name__ == "__main__":

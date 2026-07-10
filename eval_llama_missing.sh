@@ -3,10 +3,10 @@
 #SBATCH --partition=gpu-week-long
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=32
+#SBATCH --gres=gpu:4
 #SBATCH --mem=64G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=logs/eval_llama_missing_%j.out
 #SBATCH --error=logs/eval_llama_missing_%j.err
 
@@ -18,4 +18,5 @@ mkdir -p logs
 eval "$($(which conda) shell.bash hook)"
 conda activate telugu_llm
 
-python eval_llama_missing.py --output results_llama_missing.json
+accelerate launch --num_processes 4 --num_machines 1 --mixed_precision no \
+  eval_llama_missing.py --output results_llama_missing.json
