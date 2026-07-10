@@ -23,6 +23,7 @@ Usage:
 import argparse
 import json
 import math
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -155,11 +156,28 @@ def gather_merge_dicts(d):
     return d
 
 
+def load_dataset_retry(*args, retries=5, base_delay=5, **kwargs):
+    """load_dataset wrapper with retry/backoff -- the Hub connection is flaky under concurrent
+    load from multiple ranks, and an unhandled ConnectionError otherwise kills the whole job."""
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return load_dataset(*args, **kwargs)
+        except Exception as e:
+            last_exc = e
+            if attempt < retries - 1:
+                wait = base_delay * (attempt + 1)
+                print(f"  [rank {RANK}] load_dataset{args} failed ({e}); retrying in {wait}s "
+                      f"({attempt + 1}/{retries})", flush=True)
+                time.sleep(wait)
+    raise last_exc
+
+
 # ── Data loading ─────────────────────────────────────────────────────────────────
 
 def load_test_texts(lang):
     name, kwargs = TEST_SOURCE[lang]
-    ds = load_dataset(name, **kwargs)
+    ds = load_dataset_retry(name, **kwargs)
     if kwargs.get("streaming"):
         return [row["text"] for row in ds if row.get("text", "").strip()]
     return [row["text"] for row in ds if row.get("text")]
@@ -167,7 +185,7 @@ def load_test_texts(lang):
 
 def load_english_filtered_test_texts():
     data_files = [f"hf://datasets/BabyLM-community/BabyLM-Test/{name}.test" for name in EN_FILTERED_SOURCES]
-    ds = load_dataset("text", data_files={"test": data_files}, split="test")
+    ds = load_dataset_retry("text", data_files={"test": data_files}, split="test")
     return [row["text"] for row in ds if row.get("text")]
 
 
@@ -224,7 +242,7 @@ def eval_blimp(model, tokenizer):
     my_tasks = shard(BLIMP_TASKS)
     local_results = {}
     for task in tqdm(my_tasks, desc="  BLiMP", disable=not IS_MAIN):
-        ds = load_dataset("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
+        ds = load_dataset_retry("BabyLM-community/BabyLM-BLIMP-Filtered", task, split="train")
         correct = 0
         for row in ds:
             good = score_causal(model, tokenizer, row["sentence_good"])
@@ -239,7 +257,7 @@ def eval_blimp(model, tokenizer):
 
 
 def eval_mblimp(model, tokenizer):
-    ds = load_dataset("jumelet/multiblimp", "hin", split="train")
+    ds = load_dataset_retry("jumelet/multiblimp", "hin", split="train")
     my_rows = shard(list(ds))
     correct, total = 0, 0
     for row in tqdm(my_rows, desc="  M-BLiMP", leave=False, disable=not IS_MAIN):
@@ -253,7 +271,7 @@ def eval_mblimp(model, tokenizer):
 
 
 def eval_sib200(model, tokenizer, lang):
-    ds = load_dataset("Davlan/sib200", SIB200_CONFIG[lang], split="test")
+    ds = load_dataset_retry("Davlan/sib200", SIB200_CONFIG[lang], split="test")
     my_rows = shard(list(ds))
     correct, total = 0, 0
     for row in tqdm(my_rows, desc="  SIB-200", leave=False, disable=not IS_MAIN):
@@ -278,7 +296,7 @@ def eval_mubench(model, tokenizer, lang):
         task_config = task_base + suffix
         task_key = task_base.replace("Dataset_local_template", "")
         try:
-            ds = load_dataset(MUBENCH_DATASET_ID, task_config, split="test")
+            ds = load_dataset_retry(MUBENCH_DATASET_ID, task_config, split="test")
         except Exception as e:
             tqdm.write(f"    SKIP {task_config}: {e}")
             continue
