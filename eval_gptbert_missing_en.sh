@@ -10,8 +10,7 @@
 #SBATCH --output=logs/eval_gptbert_missing_en_%j.out
 #SBATCH --error=logs/eval_gptbert_missing_en_%j.err
 
-# English-side gaps only:
-#   mono_en            -- MuBench
+# English-side gaps only (mono_en already done, skipped here):
 #   en_hi_seed1  (en)   -- MuBench
 #   en_tel_seed2 (en)   -- MuBench
 
@@ -26,6 +25,5 @@ conda activate telugu_llm
 OUT=results_gptbert_missing_en.json
 RUN="accelerate launch --num_processes 4 --num_machines 1 --mixed_precision no eval_gptbert_all.py --output $OUT"
 
-$RUN --models mono_en                     --evals mubench
 $RUN --models en_hi_seed1  --langs en     --evals mubench
 $RUN --models en_tel_seed2 --langs en     --evals mubench
