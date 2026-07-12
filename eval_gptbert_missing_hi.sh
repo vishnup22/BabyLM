@@ -3,10 +3,10 @@
 #SBATCH --partition=gpu-week-long
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:4
 #SBATCH --mem=64G
-#SBATCH --time=1-00:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --output=logs/eval_gptbert_missing_hi_%j.out
 #SBATCH --error=logs/eval_gptbert_missing_hi_%j.err
 
