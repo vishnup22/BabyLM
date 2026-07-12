@@ -10,8 +10,10 @@
 #SBATCH --output=logs/eval_gptbert_missing_hi_%j.out
 #SBATCH --error=logs/eval_gptbert_missing_hi_%j.err
 
-# Hindi-side gaps only (mono_hi MuBench already done, skipped here):
-#   en_hi_seed1  (hi)   -- SIB-200, MuBench
+# Hindi-side gaps only (mono_hi MuBench and en_hi_seed1 SIB-200 already done, skipped here):
+#   en_hi_seed1  (hi)   -- MuBench (previous attempt completed all 3 tasks but hung on the
+#                          final cross-GPU merge and was killed by the 4h NCCL watchdog --
+#                          likely the old-kernel NCCL/CUDA hang PyTorch warns about at startup)
 
 set -eo pipefail
 
@@ -24,4 +26,4 @@ conda activate telugu_llm
 OUT=results_gptbert_missing_hi.json
 RUN="accelerate launch --num_processes 4 --num_machines 1 --mixed_precision no eval_gptbert_all.py --output $OUT"
 
-$RUN --models en_hi_seed1  --langs hi     --evals sib200 mubench
+$RUN --models en_hi_seed1  --langs hi     --evals mubench
