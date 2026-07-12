@@ -13,8 +13,8 @@ For every model, evaluates on every language it was trained on:
   - MuBench    : aialt/MuBench, per-language task suffix.
 
 Monolingual models load from the pulipakav-1/*-gptbert_babylm2026 HF repos.
-Bilingual models load from local checkpoints under eng-hin/eng-tel gptbert multi/
-(config + tokenizer + seed{1,2}_ema.bin) -- run this from the repo root on the cluster.
+Bilingual models load from the pulipakav-1/en-hi-gptbert-checkpoints and
+pulipakav-1/en-tel-gptbert-checkpoints HF repos (config + tokenizer + seed{1,2}_ema.bin).
 
 Usage:
     accelerate launch --num_processes 4 eval_gptbert_all.py
@@ -42,6 +42,7 @@ import torch.nn.functional as F
 from accelerate import Accelerator
 from accelerate.utils import InitProcessGroupKwargs
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 from transformers import PreTrainedTokenizerFast
 from tqdm import tqdm
 
@@ -74,9 +75,9 @@ MODEL_REGISTRY = {
     "en_tel_seed2": {"kind": "local", "pair": "tel", "seed": 2, "langs": ["en", "te"]},
 }
 
-PAIR_DIRS = {
-    "hi":  REPO_ROOT / "eng-hin/gptbert multi",
-    "tel": REPO_ROOT / "eng-tel/gptbert multi",
+PAIR_HF_REPO = {
+    "hi":  "pulipakav-1/en-hi-gptbert-checkpoints",
+    "tel": "pulipakav-1/en-tel-gptbert-checkpoints",
 }
 NAME_PREFIX = {"hi": "en-hi-gptbert-seed", "tel": "en-tel-gptbert-seed"}
 TOKENIZER_NAME = {"hi": "tokenizer_en_hi_vs32768.json", "tel": "tokenizer_en_tel_vs32768.json"}
@@ -213,13 +214,14 @@ def load_model_and_tokenizer(spec):
         model = GptBertForMaskedLM.from_pretrained(spec["repo"]).eval().to(DEVICE)
         tokenizer = PreTrainedTokenizerFast.from_pretrained(spec["repo"])
     else:
-        pair_dir = PAIR_DIRS[spec["pair"]]
-        with open(pair_dir / "configs" / "multilingual.json") as f:
+        hf_repo = PAIR_HF_REPO[spec["pair"]]
+        cfg_path = hf_hub_download(repo_id=hf_repo, filename="multilingual.json")
+        with open(cfg_path) as f:
             cfg_dict = json.load(f)
         config = GptBertConfig(**cfg_dict)
 
         ckpt_name = f'{NAME_PREFIX[spec["pair"]]}{spec["seed"]}_ema.bin'
-        ckpt_path = pair_dir / "model_checkpoints" / ckpt_name
+        ckpt_path = hf_hub_download(repo_id=hf_repo, filename=ckpt_name)
         state_dict = torch.load(ckpt_path, map_location="cpu")
 
         model = GptBertForMaskedLM(config)
@@ -230,7 +232,7 @@ def load_model_and_tokenizer(spec):
             print(f"  WARNING - unexpected keys: {unexpected}")
         model = model.eval().to(DEVICE)
 
-        tok_path = pair_dir / "tokenizers" / TOKENIZER_NAME[spec["pair"]]
+        tok_path = hf_hub_download(repo_id=hf_repo, filename=TOKENIZER_NAME[spec["pair"]])
         tokenizer = PreTrainedTokenizerFast(tokenizer_file=str(tok_path))
 
     cls_id  = tokenizer.convert_tokens_to_ids("<s>")
