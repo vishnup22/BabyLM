@@ -10,8 +10,7 @@
 #SBATCH --output=logs/eval_gptbert_missing_hi_%j.out
 #SBATCH --error=logs/eval_gptbert_missing_hi_%j.err
 
-# Hindi-side gaps only:
-#   mono_hi            -- MuBench
+# Hindi-side gaps only (mono_hi MuBench already done, skipped here):
 #   en_hi_seed1  (hi)   -- SIB-200, MuBench
 
 set -eo pipefail
@@ -25,5 +24,4 @@ conda activate telugu_llm
 OUT=results_gptbert_missing_hi.json
 RUN="accelerate launch --num_processes 4 --num_machines 1 --mixed_precision no eval_gptbert_all.py --output $OUT"
 
-$RUN --models mono_hi                     --evals mubench
 $RUN --models en_hi_seed1  --langs hi     --evals sib200 mubench

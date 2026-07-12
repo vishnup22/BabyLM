@@ -10,8 +10,8 @@
 #SBATCH --output=logs/eval_gptbert_missing_te_%j.out
 #SBATCH --error=logs/eval_gptbert_missing_te_%j.err
 
-# Telugu-side gaps only:
-#   mono_te             -- everything (perplexity, SIB-200, MuBench -- was broken/never run)
+# Telugu-side gaps only (mono_te perplexity/SIB-200 already done, skipped here):
+#   mono_te              -- MuBench
 #   en_tel_seed2 (te)    -- everything (perplexity, SIB-200, MuBench)
 
 set -eo pipefail
@@ -25,5 +25,5 @@ conda activate telugu_llm
 OUT=results_gptbert_missing_te.json
 RUN="accelerate launch --num_processes 4 --num_machines 1 --mixed_precision no eval_gptbert_all.py --output $OUT"
 
-$RUN --models mono_te                     --evals perplexity sib200 mubench
+$RUN --models mono_te                     --evals mubench
 $RUN --models en_tel_seed2 --langs te     --evals perplexity sib200 mubench
