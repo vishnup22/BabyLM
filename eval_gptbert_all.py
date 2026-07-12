@@ -31,6 +31,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import sys
 import time
 from datetime import timedelta
@@ -178,16 +179,33 @@ def reduce_sum_pair(a, b):
     return a, b
 
 
-def gather_merge_dicts(d):
-    """Gather a {key: value} dict from every rank and merge into one (every rank gets the result)."""
-    if WORLD_SIZE > 1:
-        gathered = [None] * WORLD_SIZE
-        dist.all_gather_object(gathered, d)
-        merged = {}
-        for gd in gathered:
-            merged.update(gd)
-        return merged
-    return d
+SYNC_DIR = REPO_ROOT / ".dist_sync" / os.environ.get("SLURM_JOB_ID", str(os.getpid()))
+
+
+def gather_merge_dicts(d, tag):
+    """Merge a {key: value} dict from every rank into one, via the filesystem instead of an
+    NCCL collective. BLiMP/MuBench shard whole tasks across ranks -- each rank's dict is
+    already self-contained, no cross-rank compute needed -- so a plain file wait/read avoids
+    the NCCL/CUDA collective hang this cluster's old kernel is prone to on hours-long jobs
+    (dist.all_gather_object hung for 4h+ on a completed MuBench run with no error raised).
+    `tag` must be unique per (model, lang, eval) call within a job to avoid collisions."""
+    if WORLD_SIZE == 1:
+        return d
+    SYNC_DIR.mkdir(parents=True, exist_ok=True)
+    (SYNC_DIR / f"{tag}_rank{RANK}.json").write_text(json.dumps(d))
+    expected = [SYNC_DIR / f"{tag}_rank{r}.json" for r in range(WORLD_SIZE)]
+    waited = 0
+    while not all(p.exists() for p in expected):
+        time.sleep(5)
+        waited += 5
+        if IS_MAIN and waited % 300 == 0:
+            missing = [p.name for p in expected if not p.exists()]
+            print(f"  [sync] waiting on {missing} ({waited}s elapsed)", flush=True)
+    time.sleep(2)  # guard against a reader racing a writer still flushing its file
+    merged = {}
+    for p in expected:
+        merged.update(json.loads(p.read_text()))
+    return merged
 
 
 def load_dataset_retry(*args, retries=5, base_delay=5, **kwargs):
@@ -378,7 +396,7 @@ def eval_perplexity(model, tokenizer, cls_id, pad_id, lang):
     return result
 
 
-def eval_blimp(model, tokenizer, cls_id, mask_id):
+def eval_blimp(model, tokenizer, cls_id, mask_id, model_key):
     my_tasks = shard(BLIMP_TASKS)
     local_results = {}
     for task in tqdm(my_tasks, desc="  BLiMP", disable=not IS_MAIN):
@@ -392,7 +410,7 @@ def eval_blimp(model, tokenizer, cls_id, mask_id):
             if good > bad:
                 correct += 1
         local_results[task] = round(correct / len(ds), 4)
-    results = gather_merge_dicts(local_results)
+    results = gather_merge_dicts(local_results, tag=f"{model_key}_blimp")
     if results:
         results["macro_avg"] = round(sum(results.values()) / len(results), 4)
     return results
@@ -433,7 +451,7 @@ def eval_sib200(model, tokenizer, cls_id, mask_id, lang):
     return {"accuracy": round(correct / total, 4) if total > 0 else None}
 
 
-def eval_mubench(model, tokenizer, cls_id, mask_id, lang):
+def eval_mubench(model, tokenizer, cls_id, mask_id, lang, model_key):
     suffix  = MUBENCH_LANG_SUFFIX[lang]
     my_tasks = shard(MUBENCH_TASKS_BASE)
     local_results = {}
@@ -455,7 +473,7 @@ def eval_mubench(model, tokenizer, cls_id, mask_id, lang):
             if scores.index(max(scores)) == label:
                 correct += 1
         local_results[task_key] = round(correct / len(ds), 4)
-    results = gather_merge_dicts(local_results)
+    results = gather_merge_dicts(local_results, tag=f"{model_key}_{lang}_mubench")
     if results:
         results["avg"] = round(sum(results.values()) / len(results), 4)
     return results
@@ -532,7 +550,7 @@ def main():
                     print(f"    perplexity: {all_results[model_key][lang]['perplexity']}")
 
             if lang == "en" and "blimp" in args.evals:
-                all_results[model_key][lang]["blimp"] = eval_blimp(model, tokenizer, cls_id, mask_id)
+                all_results[model_key][lang]["blimp"] = eval_blimp(model, tokenizer, cls_id, mask_id, model_key)
                 if IS_MAIN:
                     print(f"    blimp macro_avg: {all_results[model_key][lang]['blimp']['macro_avg']}")
 
@@ -547,7 +565,7 @@ def main():
                     print(f"    sib200: {all_results[model_key][lang]['sib200']}")
 
             if "mubench" in args.evals:
-                all_results[model_key][lang]["mubench"] = eval_mubench(model, tokenizer, cls_id, mask_id, lang)
+                all_results[model_key][lang]["mubench"] = eval_mubench(model, tokenizer, cls_id, mask_id, lang, model_key)
                 if IS_MAIN:
                     print(f"    mubench avg: {all_results[model_key][lang]['mubench'].get('avg')}")
 

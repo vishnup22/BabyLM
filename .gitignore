@@ -6,6 +6,7 @@ __pycache__/
 logs/
 experiments/
 model_checkpoints/
+.dist_sync/
 
 data/
 
