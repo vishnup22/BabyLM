@@ -42,7 +42,7 @@ OVERFETCH_BYTES = 2_000_000  # extra bytes requested so we can trim back to a cl
 def fetch_range(path, n_bytes):
     url = RESOLVE_URL.format(path=path)
     headers = {"Range": f"bytes=0-{n_bytes - 1}"}
-    token = os.environ.get("HF_TOKEN")
+    token = (os.environ.get("HF_TOKEN") or "").strip()
     if token:
         headers["Authorization"] = f"Bearer {token}"
     resp = requests.get(url, headers=headers, stream=True, timeout=120)
