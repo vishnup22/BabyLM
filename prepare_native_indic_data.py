@@ -1,19 +1,21 @@
-"""Download and byte-trim native (non-translated) Hindi and Telugu text from
-ai4bharat/IndicCorpV2 (CC-0 licensed) for training monolingual GPT-BERT models on
-naturally-written data, as a comparison point against the project's GPT-5-mini
-translated-data models.
+"""Download and byte-trim native (non-translated) Hindi and Telugu text from CC-100 for
+training monolingual GPT-BERT models on naturally-written data, as a comparison point against
+the project's GPT-5-mini translated-data models.
 
-Fetches a raw HTTP Range request directly against each file's `resolve/main/` URL instead of
-going through huggingface_hub's Python client / datasets streaming path -- the latter routes
-through HF's newer Xet CDN bridge, which was returning persistent 403/SignatureError failures
-for this repo's large files at the time this was written. A plain Range request hits HF's
-classic resolve/CDN path instead, which is separate infrastructure.
+Originally targeted ai4bharat/IndicCorpV2 on Hugging Face, but that repo's large files were
+persistently failing with 403/SignatureError from HF's Xet CDN bridge (a server-side issue --
+confirmed independent of client config: tried datasets streaming, hf_xet removal, and a raw
+HTTP Range request against the resolve/main/ URL, all redirected to the same broken endpoint).
+CC-100 is hosted directly by the original team at data.statmt.org, entirely independent of
+Hugging Face, and is a standard, widely-used Common-Crawl-derived monolingual corpus.
 
-IndicCorpV2 is far larger than needed (~80GB Hindi across 3 shards, ~15.76GB Telugu in one
-file), so this only requests TARGET_BYTES (plus a small overfetch buffer) from the *first*
-shard of each language -- no need to touch the rest. Hindi and Telugu are trimmed to the same
-byte count (matching this project's existing translated-data scale by default: Hindi's
-1,381,881,024 bytes, so both native corpora end up byte-matched to each other too).
+Streams and decompresses each language's .xz file on the fly, stopping the moment it has
+collected TARGET_BYTES of decompressed text -- no need to download the full compressed files
+(Hindi is 2.59GB compressed, Telugu 562MB compressed; decompressed output needed here is only
+~1.3GB per language, so this only pulls a fraction of either file).
+
+License note: CC-100 is distributed under the Common Crawl Foundation's Terms of Use (not as
+permissive as IndicCorpV2's CC-0, but standard for this widely-used research corpus).
 
 Usage:
     python prepare_native_indic_data.py
@@ -22,48 +24,49 @@ Usage:
 """
 
 import argparse
-import os
+import lzma
 from pathlib import Path
 
 import requests
 
-REPO_ID = "ai4bharat/IndicCorpV2"
-# First shard of each language is more than enough on its own (each is multi-GB) for any
-# reasonable target size, so we never need to touch hi-2.txt/hi-3.txt.
-FILE_PATHS = {"hi": "data/hi-1.txt", "te": "data/te.txt"}
-RESOLVE_URL = f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/{{path}}"
+CC100_URLS = {
+    "hi": "https://data.statmt.org/cc-100/hi.txt.xz",
+    "te": "https://data.statmt.org/cc-100/te.txt.xz",
+}
 
-# Defaults to this project's existing Hindi translated-corpus byte count, so both native
-# corpora end up byte-matched to each other and to the scale of the existing translated data.
+# Matches this project's existing Hindi translated-corpus byte count, so both native corpora
+# end up byte-matched to each other and to the scale of the existing translated data.
 DEFAULT_TARGET_BYTES = 1_381_881_024
-OVERFETCH_BYTES = 2_000_000  # extra bytes requested so we can trim back to a clean line boundary
+CHUNK_SIZE = 4 * 1024 * 1024
 
 
-def fetch_range(path, n_bytes):
-    url = RESOLVE_URL.format(path=path)
-    headers = {"Range": f"bytes=0-{n_bytes - 1}"}
-    token = (os.environ.get("HF_TOKEN") or "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    resp = requests.get(url, headers=headers, stream=True, timeout=120)
+def collect_native_text(lang_code, url, target_bytes, out_path):
+    print(f"[{lang_code}] streaming + decompressing {url} until {target_bytes:,} bytes...")
+    decompressor = lzma.LZMADecompressor()
+    collected = bytearray()
+    compressed_read = 0
+
+    resp = requests.get(url, stream=True, timeout=120)
     resp.raise_for_status()
-    chunks = []
-    got = 0
-    for chunk in resp.iter_content(chunk_size=8 * 1024 * 1024):
-        chunks.append(chunk)
-        got += len(chunk)
-        if got % (200 * 1024 * 1024) < len(chunk):
-            print(f"    ...{got:,} bytes fetched", flush=True)
-    return b"".join(chunks)
+    try:
+        for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+            compressed_read += len(chunk)
+            try:
+                out = decompressor.decompress(chunk)
+            except lzma.LZMAError as e:
+                print(f"  [{lang_code}] decompression stopped ({e}) -- using what we have")
+                break
+            collected.extend(out)
+            if len(collected) % (200 * 1024 * 1024) < len(out):
+                print(f"  [{lang_code}] {len(collected):,}/{target_bytes:,} decompressed bytes "
+                      f"({compressed_read:,} compressed bytes read)...", flush=True)
+            if len(collected) >= target_bytes:
+                break
+    finally:
+        resp.close()
 
-
-def collect_native_text(lang_code, path, target_bytes, out_path):
-    print(f"[{lang_code}] fetching bytes 0-{target_bytes + OVERFETCH_BYTES:,} of {path}...")
-    raw = fetch_range(path, target_bytes + OVERFETCH_BYTES)
-
-    # Trim to target_bytes, then back up to the last full line so we don't keep a
-    # truncated/partial line (or a byte range that split a multi-byte UTF-8 character).
-    trimmed = raw[:target_bytes]
+    # Trim to target_bytes, then back up to the last full line.
+    trimmed = bytes(collected[:target_bytes])
     last_newline = trimmed.rfind(b"\n")
     if last_newline != -1:
         trimmed = trimmed[:last_newline + 1]
@@ -75,7 +78,7 @@ def collect_native_text(lang_code, path, target_bytes, out_path):
     n_words = len(text.split())
     n_lines = text.count("\n")
     print(f"[{lang_code}] done: {n_bytes:,} bytes, {n_lines:,} lines, "
-          f"{n_words:,} words -> {out_path}")
+          f"{n_words:,} words -> {out_path}  ({compressed_read:,} compressed bytes fetched)")
     return n_bytes, n_lines, n_words
 
 
@@ -95,7 +98,7 @@ def main():
     for lang_code in args.langs:
         out_path = out_dir / f"native_{lang_code}.txt"
         stats[lang_code] = collect_native_text(
-            lang_code, FILE_PATHS[lang_code], args.target_bytes, out_path)
+            lang_code, CC100_URLS[lang_code], args.target_bytes, out_path)
 
     print("\n" + "=" * 60)
     print("Summary")
