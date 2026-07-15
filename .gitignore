@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
 
+# Secrets -- never commit tokens/keys
+.env
+*.token
+hf_token*
+**/secrets.txt
+
 .ipynb_checkpoints/
 
 logs/
