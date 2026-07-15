@@ -336,8 +336,12 @@ def init_datasets(args, tokenizer):
         )
 
     # ===== Validation dataset =====
-    print("Initializing validation dataset...")
-    valid_dataloader = ValidationDataset(valid_shard_dir, tokenizer, args, rank=None, world_size=None)
+    if args.validate_every > 0:
+        print("Initializing validation dataset...")
+        valid_dataloader = ValidationDataset(valid_shard_dir, tokenizer, args, rank=None, world_size=None)
+    else:
+        print("Skipping validation dataset (--validate_every 0)")
+        valid_dataloader = None
 
     return masked_train_dataloader, causal_train_dataloader, valid_dataloader
     
