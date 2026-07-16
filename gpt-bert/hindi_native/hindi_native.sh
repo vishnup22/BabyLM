@@ -12,7 +12,7 @@
 
 set -eo pipefail
 
-cd /path/to/babylm-baselines/gpt-bert/hindi_native
+cd /storage2/home/pulipakv/BabyLM/gpt-bert/hindi_native
 mkdir -p logs
 
 eval "$($(which conda) shell.bash hook)"
