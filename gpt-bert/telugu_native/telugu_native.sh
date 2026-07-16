@@ -22,6 +22,9 @@ export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29502
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# train_model.sh's torchrun defaults to N_GPUS=3, but this job requests --gres=gpu:4 --
+# must match the physical GPU count or train_multi_gpu.py's setup_training() asserts
+export N_GPUS=4
 # needed by scripts/download_dataset.sh (pulipakav-1/hi-te) and the final HF push in run_all.sh
 export HF_TOKEN="${HF_TOKEN:?set HF_TOKEN before submitting}"
 
