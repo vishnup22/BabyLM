@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import argparse
+import re
+import unicodedata
+from pathlib import Path
+
+
+ZERO_WIDTH_AND_BOM = ["﻿", "​", "‌", "‍", "⁠"]
+
+
+def clean_preserve_punctuation(text: str) -> str:
+    text = unicodedata.normalize("NFC", str(text))
+    for bad in ZERO_WIDTH_AND_BOM:
+        text = text.replace(bad, "")
+    cleaned_chars = []
+    for ch in text:
+        code = ord(ch)
+        if code < 32 or code == 127:
+            cleaned_chars.append(" ")
+        elif ch.isprintable():
+            cleaned_chars.append(ch)
+    cleaned = "".join(cleaned_chars)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def source_name_from_path(path: Path) -> str:
+    name = path.name
+    if ".train." in name:
+        return name.split(".train.")[0]
+    if ".train" in name:
+        return name.split(".train")[0]
+    return path.stem
+
+
+def resolve_dataset_dir(dataset_name: str, data_root: Path) -> Path:
+    base_dir = data_root / dataset_name
+    train_dir = base_dir / "train"
+    base_has_files = any(base_dir.glob("*.train*.txt"))
+    train_has_files = any(train_dir.glob("*.train*.txt"))
+    if base_has_files:
+        return base_dir
+    if train_has_files:
+        return train_dir
+    return base_dir
+
+
+def clean_dataset(dataset_name: str, data_root: Path) -> None:
+    input_dir = resolve_dataset_dir(dataset_name, data_root)
+    text_files = sorted(input_dir.glob("*.train*.txt"))
+    if not text_files:
+        raise FileNotFoundError(f"No .train*.txt files found in {input_dir}")
+    for tf in text_files:
+        text = tf.read_text(encoding="utf-8", errors="ignore")
+        original_len = len(text)
+        cleaned_lines = [c for l in text.splitlines() if (c := clean_preserve_punctuation(l))]
+        cleaned = "\n".join(cleaned_lines)
+        tf.write_text(cleaned, encoding="utf-8")
+        print(f"Cleaned {tf.name}: {original_len:,} -> {len(cleaned):,} chars")
+    print(f"Done. Files overwritten in {input_dir}/")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dataset", help="Dataset folder name under data/raw/")
+    parser.add_argument("--data_root", type=Path, default=Path("data/raw"))
+    args = parser.parse_args()
+    clean_dataset(args.dataset, args.data_root)
