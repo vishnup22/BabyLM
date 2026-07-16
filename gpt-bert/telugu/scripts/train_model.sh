@@ -14,8 +14,8 @@ torchrun --nproc_per_node="$N_GPUS" --master_addr "$MASTER_ADDR" --master_port "
   --tokenizer_path tokenizers/tokenizer_base_16384.json \
   --name "$NAME" \
   --output_dir model_checkpoints \
-  --hybrid_denominator 3 \
-  --hybrid_numerator 2 \
+  --hybrid_denominator "$N_GPUS" \
+  --hybrid_numerator "$((N_GPUS - 1))" \
   --global_batch_size 32768 \
   --local_batch_size 64 \
   --seq_length 128 \
