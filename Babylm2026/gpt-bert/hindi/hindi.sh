@@ -21,5 +21,6 @@ conda activate telugu_llm
 export TOKENIZERS_PARALLELISM=false
 export MASTER_ADDR=127.0.0.1
 export MASTER_PORT=29500
+export N_GPUS=4
 
 bash scripts/train_model.sh
