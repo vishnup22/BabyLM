@@ -9,6 +9,7 @@ Run locally (single GPU, no accelerate launch needed):
     python eval_english_clean_ppl.py
 """
 
+import argparse
 import json
 import math
 import os
@@ -111,6 +112,13 @@ GPTBERT_MODEL_SPECS = [
     ("GPT-BERT eng-tel", "en_tel_seed2"),
 ]
 
+# already-completed results from an earlier run, pre-seeded into the summary when --skip-gptwee is passed
+GPTWEE_DONE_RESULTS = {
+    "GPT-Wee mono-en": 292.3493,
+    "GPT-Wee eng-hin": 448.1096,
+    "GPT-Wee eng-tel": 365.2702,
+}
+
 
 def save_results(results, clean_n, total_n):
     RESULTS_PATH.write_text(json.dumps({
@@ -121,12 +129,19 @@ def save_results(results, clean_n, total_n):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--skip-gptwee", action="store_true",
+                         help="Skip the 3 GPT-Wee models (already run) and reuse their saved results")
+    args = parser.parse_args()
+
     t0 = time.time()
     clean_texts, total_n = build_clean_english_texts()
     clean_n = len(clean_texts)
-    results = {}
+    results = dict(GPTWEE_DONE_RESULTS) if args.skip_gptwee else {}
 
-    for label, repo, use_fp16 in HF_MODEL_SPECS:
+    model_specs = [s for s in HF_MODEL_SPECS if not (args.skip_gptwee and s[0].startswith("GPT-Wee"))]
+
+    for label, repo, use_fp16 in model_specs:
         print(f"\n=== {label} ({repo}) ===", flush=True)
         m0 = time.time()
         tokenizer = AutoTokenizer.from_pretrained(repo, token=hf_token)
