@@ -459,6 +459,12 @@ def prepare_model_and_optimizer(args):
         epoch = state_dict.get("epoch", 0)
         if "cumulative_tokens" in state_dict:
             args.cumulative_tokens = state_dict["cumulative_tokens"]
+        # optimizer.load_state_dict() replaces the freshly-initialized (zeroed) LAMB state
+        # with the loaded tensors, but the old GPU allocations aren't necessarily released
+        # back to the caching allocator immediately, leaving the pool fragmented right as
+        # the first training step needs headroom for activations -- reclaim it explicitly.
+        del state_dict
+        torch.cuda.empty_cache()
         return model, ema_model, optimizer, scheduler, global_step, epoch
 
     print("Model prep finished!")
